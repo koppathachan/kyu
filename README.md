@@ -1,2 +1,2 @@
 # kyu
-Occam's queue
+Occam's queue with Occam's pub-sub service

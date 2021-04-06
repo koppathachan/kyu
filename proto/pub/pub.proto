@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package pub;
+
+option go_package = "github.com/sasidakh/pub";
+
+message Message {
+  string qname = 1;
+  bytes data = 2;
+}
+
+message Ack {
+  bool ok = 1;
+  string message = 2;
+}
+
+message PublishResult {
+  string qname = 1;
+  Ack ack = 2;
+}
+
+service Publisher {
+  rpc Publish(Message) returns (PublishResult);
+}

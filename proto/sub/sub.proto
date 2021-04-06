@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package sub;
+
+option go_package = "github.com/sasidakh/sub";
+
+message Queue {
+  string qname = 1;
+}
+
+message Message {
+  string qname = 1;
+  bytes data = 2;
+}
+
+service Subscriber {
+  rpc Subscribe(Queue) returns (stream Message);
+}
