@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"fmt"
@@ -12,12 +11,13 @@ import (
 )
 
 func main() {
-	listner, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", "3000"))
+	listner, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", "50051"))
 	if err != nil {
 		log.Fatalln(err)
 	}
 	s := grpc.NewServer()
 	q.RegisterQueueServer(s, q.Server{})
+	log.Println("Queue at : ", listner.Addr())
 	if err := s.Serve(listner); err != nil {
 		log.Fatalln(err)
 	}

@@ -1,13 +1,18 @@
 syntax = "proto3";
 
-package pub;
+package pubsub;
 
-option go_package = "github.com/sasidakh/pub";
+option go_package = "github.com/sasidakh/pubsub";
 
 message Message {
   string qname = 1;
-  bytes data = 2;
+  string data = 2;
 }
+
+message Queue {
+  string qname = 1;
+}
+
 
 message Ack {
   bool ok = 1;
@@ -21,4 +26,5 @@ message PublishResult {
 
 service Publisher {
   rpc Publish(Message) returns (PublishResult);
+  rpc Subscribe(Queue) returns (stream Message);
 }

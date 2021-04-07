@@ -20,7 +20,7 @@ message CreateResponse {
 
 message Message {
   string qname = 1;
-  bytes data = 2;
+  string data = 2;
 }
 
 message WriteResult {
@@ -29,8 +29,19 @@ message WriteResult {
   uint32 count = 3;
 }
 
+enum Event {
+  ENQUEUE = 0;
+  DEQUEUE = 1;
+}
+
+message QueueEvent {
+  string qname = 1;
+  Event event = 2;
+}
+
 service Queue {
   rpc Create(QueueDetails) returns (CreateResponse);
   rpc Enqueue(Message) returns (WriteResult);
   rpc Dequeue(QueueDetails) returns (Message);
+  rpc Events(QueueDetails) returns (stream QueueEvent);
 }

@@ -21,6 +21,7 @@ type QueueClient interface {
 	Create(ctx context.Context, in *QueueDetails, opts ...grpc.CallOption) (*CreateResponse, error)
 	Enqueue(ctx context.Context, in *Message, opts ...grpc.CallOption) (*WriteResult, error)
 	Dequeue(ctx context.Context, in *QueueDetails, opts ...grpc.CallOption) (*Message, error)
+	Events(ctx context.Context, in *QueueDetails, opts ...grpc.CallOption) (Queue_EventsClient, error)
 }
 
 type queueClient struct {
@@ -58,6 +59,38 @@ func (c *queueClient) Dequeue(ctx context.Context, in *QueueDetails, opts ...grp
 	return out, nil
 }
 
+func (c *queueClient) Events(ctx context.Context, in *QueueDetails, opts ...grpc.CallOption) (Queue_EventsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Queue_ServiceDesc.Streams[0], "/q.Queue/Events", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queueEventsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Queue_EventsClient interface {
+	Recv() (*QueueEvent, error)
+	grpc.ClientStream
+}
+
+type queueEventsClient struct {
+	grpc.ClientStream
+}
+
+func (x *queueEventsClient) Recv() (*QueueEvent, error) {
+	m := new(QueueEvent)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // QueueServer is the server API for Queue service.
 // All implementations must embed UnimplementedQueueServer
 // for forward compatibility
@@ -65,6 +98,7 @@ type QueueServer interface {
 	Create(context.Context, *QueueDetails) (*CreateResponse, error)
 	Enqueue(context.Context, *Message) (*WriteResult, error)
 	Dequeue(context.Context, *QueueDetails) (*Message, error)
+	Events(*QueueDetails, Queue_EventsServer) error
 	mustEmbedUnimplementedQueueServer()
 }
 
@@ -80,6 +114,9 @@ func (UnimplementedQueueServer) Enqueue(context.Context, *Message) (*WriteResult
 }
 func (UnimplementedQueueServer) Dequeue(context.Context, *QueueDetails) (*Message, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Dequeue not implemented")
+}
+func (UnimplementedQueueServer) Events(*QueueDetails, Queue_EventsServer) error {
+	return status.Errorf(codes.Unimplemented, "method Events not implemented")
 }
 func (UnimplementedQueueServer) mustEmbedUnimplementedQueueServer() {}
 
@@ -148,6 +185,27 @@ func _Queue_Dequeue_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Queue_Events_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(QueueDetails)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueueServer).Events(m, &queueEventsServer{stream})
+}
+
+type Queue_EventsServer interface {
+	Send(*QueueEvent) error
+	grpc.ServerStream
+}
+
+type queueEventsServer struct {
+	grpc.ServerStream
+}
+
+func (x *queueEventsServer) Send(m *QueueEvent) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Queue_ServiceDesc is the grpc.ServiceDesc for Queue service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +226,12 @@ var Queue_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Queue_Dequeue_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Events",
+			Handler:       _Queue_Events_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "q/q.proto",
 }
