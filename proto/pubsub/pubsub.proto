@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package pubsub;
 
-option go_package = "github.com/sasidakh/pubsub";
+option go_package = "github.com/sasidakh/kyu/pubsub";
 
 import "q/msg/msg.proto";
 
@@ -10,7 +10,7 @@ message PublishResult {
   msg.Ack ack = 1;
 }
 
-service Publisher {
+service PubSub {
   rpc Publish(msg.Message) returns (PublishResult);
   rpc Subscribe(msg.Queue) returns (stream msg.Message);
 }

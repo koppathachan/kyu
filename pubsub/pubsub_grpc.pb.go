@@ -4,7 +4,7 @@ package pubsub
 
 import (
 	context "context"
-	msg "github.com/sasidakh/q/msg"
+	msg "github.com/sasidakh/kyu/q/msg"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -15,37 +15,37 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// PublisherClient is the client API for Publisher service.
+// PubSubClient is the client API for PubSub service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type PublisherClient interface {
+type PubSubClient interface {
 	Publish(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*PublishResult, error)
-	Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error)
+	Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (PubSub_SubscribeClient, error)
 }
 
-type publisherClient struct {
+type pubSubClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewPublisherClient(cc grpc.ClientConnInterface) PublisherClient {
-	return &publisherClient{cc}
+func NewPubSubClient(cc grpc.ClientConnInterface) PubSubClient {
+	return &pubSubClient{cc}
 }
 
-func (c *publisherClient) Publish(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*PublishResult, error) {
+func (c *pubSubClient) Publish(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*PublishResult, error) {
 	out := new(PublishResult)
-	err := c.cc.Invoke(ctx, "/pubsub.Publisher/Publish", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pubsub.PubSub/Publish", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *publisherClient) Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Publisher_ServiceDesc.Streams[0], "/pubsub.Publisher/Subscribe", opts...)
+func (c *pubSubClient) Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (PubSub_SubscribeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &PubSub_ServiceDesc.Streams[0], "/pubsub.PubSub/Subscribe", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &publisherSubscribeClient{stream}
+	x := &pubSubSubscribeClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -55,16 +55,16 @@ func (c *publisherClient) Subscribe(ctx context.Context, in *msg.Queue, opts ...
 	return x, nil
 }
 
-type Publisher_SubscribeClient interface {
+type PubSub_SubscribeClient interface {
 	Recv() (*msg.Message, error)
 	grpc.ClientStream
 }
 
-type publisherSubscribeClient struct {
+type pubSubSubscribeClient struct {
 	grpc.ClientStream
 }
 
-func (x *publisherSubscribeClient) Recv() (*msg.Message, error) {
+func (x *pubSubSubscribeClient) Recv() (*msg.Message, error) {
 	m := new(msg.Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -72,93 +72,93 @@ func (x *publisherSubscribeClient) Recv() (*msg.Message, error) {
 	return m, nil
 }
 
-// PublisherServer is the server API for Publisher service.
-// All implementations must embed UnimplementedPublisherServer
+// PubSubServer is the server API for PubSub service.
+// All implementations must embed UnimplementedPubSubServer
 // for forward compatibility
-type PublisherServer interface {
+type PubSubServer interface {
 	Publish(context.Context, *msg.Message) (*PublishResult, error)
-	Subscribe(*msg.Queue, Publisher_SubscribeServer) error
-	mustEmbedUnimplementedPublisherServer()
+	Subscribe(*msg.Queue, PubSub_SubscribeServer) error
+	mustEmbedUnimplementedPubSubServer()
 }
 
-// UnimplementedPublisherServer must be embedded to have forward compatible implementations.
-type UnimplementedPublisherServer struct {
+// UnimplementedPubSubServer must be embedded to have forward compatible implementations.
+type UnimplementedPubSubServer struct {
 }
 
-func (UnimplementedPublisherServer) Publish(context.Context, *msg.Message) (*PublishResult, error) {
+func (UnimplementedPubSubServer) Publish(context.Context, *msg.Message) (*PublishResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Publish not implemented")
 }
-func (UnimplementedPublisherServer) Subscribe(*msg.Queue, Publisher_SubscribeServer) error {
+func (UnimplementedPubSubServer) Subscribe(*msg.Queue, PubSub_SubscribeServer) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
-func (UnimplementedPublisherServer) mustEmbedUnimplementedPublisherServer() {}
+func (UnimplementedPubSubServer) mustEmbedUnimplementedPubSubServer() {}
 
-// UnsafePublisherServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to PublisherServer will
+// UnsafePubSubServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PubSubServer will
 // result in compilation errors.
-type UnsafePublisherServer interface {
-	mustEmbedUnimplementedPublisherServer()
+type UnsafePubSubServer interface {
+	mustEmbedUnimplementedPubSubServer()
 }
 
-func RegisterPublisherServer(s grpc.ServiceRegistrar, srv PublisherServer) {
-	s.RegisterService(&Publisher_ServiceDesc, srv)
+func RegisterPubSubServer(s grpc.ServiceRegistrar, srv PubSubServer) {
+	s.RegisterService(&PubSub_ServiceDesc, srv)
 }
 
-func _Publisher_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PubSub_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(msg.Message)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PublisherServer).Publish(ctx, in)
+		return srv.(PubSubServer).Publish(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pubsub.Publisher/Publish",
+		FullMethod: "/pubsub.PubSub/Publish",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PublisherServer).Publish(ctx, req.(*msg.Message))
+		return srv.(PubSubServer).Publish(ctx, req.(*msg.Message))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Publisher_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _PubSub_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(msg.Queue)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(PublisherServer).Subscribe(m, &publisherSubscribeServer{stream})
+	return srv.(PubSubServer).Subscribe(m, &pubSubSubscribeServer{stream})
 }
 
-type Publisher_SubscribeServer interface {
+type PubSub_SubscribeServer interface {
 	Send(*msg.Message) error
 	grpc.ServerStream
 }
 
-type publisherSubscribeServer struct {
+type pubSubSubscribeServer struct {
 	grpc.ServerStream
 }
 
-func (x *publisherSubscribeServer) Send(m *msg.Message) error {
+func (x *pubSubSubscribeServer) Send(m *msg.Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-// Publisher_ServiceDesc is the grpc.ServiceDesc for Publisher service.
+// PubSub_ServiceDesc is the grpc.ServiceDesc for PubSub service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Publisher_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "pubsub.Publisher",
-	HandlerType: (*PublisherServer)(nil),
+var PubSub_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pubsub.PubSub",
+	HandlerType: (*PubSubServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Publish",
-			Handler:    _Publisher_Publish_Handler,
+			Handler:    _PubSub_Publish_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Subscribe",
-			Handler:       _Publisher_Subscribe_Handler,
+			Handler:       _PubSub_Subscribe_Handler,
 			ServerStreams: true,
 		},
 	},

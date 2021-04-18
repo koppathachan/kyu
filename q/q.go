@@ -2,14 +2,15 @@ package q
 
 import (
 	"context"
-	"io"
+	"errors"
 
+	"github.com/sasidakh/kyu/q/msg"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type Server struct {
-	UnimplementedQueueServer
+	UnimplementedQServer
 }
 
 type queue struct {
@@ -29,57 +30,61 @@ func (qu *queue) Dequeue() string {
 
 var qmap map[string]*queue = make(map[string]*queue)
 
-func (s Server) Create(ctx context.Context, qd *QueueDetails) (*CreateResponse, error) {
-	qu, ok := qmap[qd.Qname]
+func (s Server) Create(ctx context.Context, que *msg.Queue) (*msg.Ack, error) {
+	_, ok := qmap[que.Name]
 	if ok {
-		return &CreateResponse{
-			Qname: qu.name,
-			Ack: &Ack{
-				Ok:      ok,
-				Message: "Queue Exists",
-			},
+		return &msg.Ack{
+			Q:       que,
+			Ok:      ok,
+			Message: "Exists",
 		}, nil
 	}
-	qmap[qd.Qname] = &queue{
-		name:  qd.Qname,
+	qmap[que.Name] = &queue{
+		name:  que.Name,
 		items: []string{},
 	}
-	return &CreateResponse{
-		Qname: qd.Qname,
-		Ack: &Ack{
-			Ok:      true,
-			Message: "Queue Created",
-		},
+	return &msg.Ack{
+		Q:       que,
+		Ok:      true,
+		Message: "Created",
 	}, nil
 }
 
-func (s Server) Enqueue(ctx context.Context, m *Message) (*WriteResult, error) {
-	qu, ok := qmap[m.Qname]
+func writeRes(qname string, len uint32) *WriteResult {
+	return &WriteResult{
+		Ack: &msg.Ack{
+			Q: &msg.Queue{
+				Name: qname,
+			},
+			Ok:      false,
+			Message: "SUCCESS",
+		},
+		Count: len,
+	}
+}
+
+func (s Server) Enqueue(ctx context.Context, m *msg.Message) (*WriteResult, error) {
+	qu, ok := qmap[m.Q.Name]
 	if !ok {
-		return nil, status.Error(codes.NotFound, "Queue not found")
+		return nil, errors.New("NoQ")
 	}
 	qu.Enqueue(m.Data)
-	return &WriteResult{
-		Qname: qu.name,
-		Ack: &Ack{
-			Ok:      ok,
-			Message: "q'ed",
-		},
-		Count: uint32(len([]byte(m.Data))),
-	}, nil
+	return writeRes(m.Q.Name, uint32(len(m.Data))), nil
 }
 
-func (s Server) Dequeue(ctx context.Context, qd *QueueDetails) (*Message, error) {
-	qu, ok := qmap[qd.Qname]
+func (s Server) Dequeue(q *msg.Queue, qs Q_DequeueServer) error {
+	qu, ok := qmap[q.Name]
 	if !ok {
-		return nil, status.Error(codes.NotFound, "Queue not found")
+		return errors.New("NoQ")
 	}
-	if len(qu.items) == 0 {
-		return nil, io.EOF
+	for {
+		if len(qu.items) != 0 {
+			if err := qs.Send(&msg.Message{
+				Q:    q,
+				Data: qu.items[0],
+			}); err != nil {
+				qu.Dequeue()
+			}
+		}
 	}
-	item := qu.Dequeue()
-	return &Message{
-		Qname: qu.name,
-		Data:  item,
-	}, nil
 }

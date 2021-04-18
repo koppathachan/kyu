@@ -4,7 +4,7 @@ package q
 
 import (
 	context "context"
-	msg "github.com/sasidakh/q/msg"
+	msg "github.com/sasidakh/kyu/q/msg"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -15,72 +15,47 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// QueueClient is the client API for Queue service.
+// QClient is the client API for Q service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type QueueClient interface {
+type QClient interface {
 	Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*msg.Ack, error)
-	Enqueue(ctx context.Context, opts ...grpc.CallOption) (Queue_EnqueueClient, error)
-	Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Queue_DequeueClient, error)
+	Enqueue(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*WriteResult, error)
+	Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Q_DequeueClient, error)
 }
 
-type queueClient struct {
+type qClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewQueueClient(cc grpc.ClientConnInterface) QueueClient {
-	return &queueClient{cc}
+func NewQClient(cc grpc.ClientConnInterface) QClient {
+	return &qClient{cc}
 }
 
-func (c *queueClient) Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*msg.Ack, error) {
+func (c *qClient) Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*msg.Ack, error) {
 	out := new(msg.Ack)
-	err := c.cc.Invoke(ctx, "/q.Queue/Create", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/q.Q/Create", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *queueClient) Enqueue(ctx context.Context, opts ...grpc.CallOption) (Queue_EnqueueClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Queue_ServiceDesc.Streams[0], "/q.Queue/Enqueue", opts...)
+func (c *qClient) Enqueue(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*WriteResult, error) {
+	out := new(WriteResult)
+	err := c.cc.Invoke(ctx, "/q.Q/Enqueue", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &queueEnqueueClient{stream}
-	return x, nil
+	return out, nil
 }
 
-type Queue_EnqueueClient interface {
-	Send(*msg.Message) error
-	CloseAndRecv() (*WriteResult, error)
-	grpc.ClientStream
-}
-
-type queueEnqueueClient struct {
-	grpc.ClientStream
-}
-
-func (x *queueEnqueueClient) Send(m *msg.Message) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *queueEnqueueClient) CloseAndRecv() (*WriteResult, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(WriteResult)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *queueClient) Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Queue_DequeueClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Queue_ServiceDesc.Streams[1], "/q.Queue/Dequeue", opts...)
+func (c *qClient) Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Q_DequeueClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Q_ServiceDesc.Streams[0], "/q.Q/Dequeue", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &queueDequeueClient{stream}
+	x := &qDequeueClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -90,16 +65,16 @@ func (c *queueClient) Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.C
 	return x, nil
 }
 
-type Queue_DequeueClient interface {
+type Q_DequeueClient interface {
 	Recv() (*msg.Message, error)
 	grpc.ClientStream
 }
 
-type queueDequeueClient struct {
+type qDequeueClient struct {
 	grpc.ClientStream
 }
 
-func (x *queueDequeueClient) Recv() (*msg.Message, error) {
+func (x *qDequeueClient) Recv() (*msg.Message, error) {
 	m := new(msg.Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -107,128 +82,119 @@ func (x *queueDequeueClient) Recv() (*msg.Message, error) {
 	return m, nil
 }
 
-// QueueServer is the server API for Queue service.
-// All implementations must embed UnimplementedQueueServer
+// QServer is the server API for Q service.
+// All implementations must embed UnimplementedQServer
 // for forward compatibility
-type QueueServer interface {
+type QServer interface {
 	Create(context.Context, *msg.Queue) (*msg.Ack, error)
-	Enqueue(Queue_EnqueueServer) error
-	Dequeue(*msg.Queue, Queue_DequeueServer) error
-	mustEmbedUnimplementedQueueServer()
+	Enqueue(context.Context, *msg.Message) (*WriteResult, error)
+	Dequeue(*msg.Queue, Q_DequeueServer) error
+	mustEmbedUnimplementedQServer()
 }
 
-// UnimplementedQueueServer must be embedded to have forward compatible implementations.
-type UnimplementedQueueServer struct {
+// UnimplementedQServer must be embedded to have forward compatible implementations.
+type UnimplementedQServer struct {
 }
 
-func (UnimplementedQueueServer) Create(context.Context, *msg.Queue) (*msg.Ack, error) {
+func (UnimplementedQServer) Create(context.Context, *msg.Queue) (*msg.Ack, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedQueueServer) Enqueue(Queue_EnqueueServer) error {
-	return status.Errorf(codes.Unimplemented, "method Enqueue not implemented")
+func (UnimplementedQServer) Enqueue(context.Context, *msg.Message) (*WriteResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Enqueue not implemented")
 }
-func (UnimplementedQueueServer) Dequeue(*msg.Queue, Queue_DequeueServer) error {
+func (UnimplementedQServer) Dequeue(*msg.Queue, Q_DequeueServer) error {
 	return status.Errorf(codes.Unimplemented, "method Dequeue not implemented")
 }
-func (UnimplementedQueueServer) mustEmbedUnimplementedQueueServer() {}
+func (UnimplementedQServer) mustEmbedUnimplementedQServer() {}
 
-// UnsafeQueueServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to QueueServer will
+// UnsafeQServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to QServer will
 // result in compilation errors.
-type UnsafeQueueServer interface {
-	mustEmbedUnimplementedQueueServer()
+type UnsafeQServer interface {
+	mustEmbedUnimplementedQServer()
 }
 
-func RegisterQueueServer(s grpc.ServiceRegistrar, srv QueueServer) {
-	s.RegisterService(&Queue_ServiceDesc, srv)
+func RegisterQServer(s grpc.ServiceRegistrar, srv QServer) {
+	s.RegisterService(&Q_ServiceDesc, srv)
 }
 
-func _Queue_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Q_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(msg.Queue)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(QueueServer).Create(ctx, in)
+		return srv.(QServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/q.Queue/Create",
+		FullMethod: "/q.Q/Create",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(QueueServer).Create(ctx, req.(*msg.Queue))
+		return srv.(QServer).Create(ctx, req.(*msg.Queue))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Queue_Enqueue_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(QueueServer).Enqueue(&queueEnqueueServer{stream})
-}
-
-type Queue_EnqueueServer interface {
-	SendAndClose(*WriteResult) error
-	Recv() (*msg.Message, error)
-	grpc.ServerStream
-}
-
-type queueEnqueueServer struct {
-	grpc.ServerStream
-}
-
-func (x *queueEnqueueServer) SendAndClose(m *WriteResult) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *queueEnqueueServer) Recv() (*msg.Message, error) {
-	m := new(msg.Message)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _Q_Enqueue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(msg.Message)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(QServer).Enqueue(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/q.Q/Enqueue",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QServer).Enqueue(ctx, req.(*msg.Message))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Queue_Dequeue_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Q_Dequeue_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(msg.Queue)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(QueueServer).Dequeue(m, &queueDequeueServer{stream})
+	return srv.(QServer).Dequeue(m, &qDequeueServer{stream})
 }
 
-type Queue_DequeueServer interface {
+type Q_DequeueServer interface {
 	Send(*msg.Message) error
 	grpc.ServerStream
 }
 
-type queueDequeueServer struct {
+type qDequeueServer struct {
 	grpc.ServerStream
 }
 
-func (x *queueDequeueServer) Send(m *msg.Message) error {
+func (x *qDequeueServer) Send(m *msg.Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-// Queue_ServiceDesc is the grpc.ServiceDesc for Queue service.
+// Q_ServiceDesc is the grpc.ServiceDesc for Q service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Queue_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "q.Queue",
-	HandlerType: (*QueueServer)(nil),
+var Q_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "q.Q",
+	HandlerType: (*QServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Create",
-			Handler:    _Queue_Create_Handler,
+			Handler:    _Q_Create_Handler,
+		},
+		{
+			MethodName: "Enqueue",
+			Handler:    _Q_Enqueue_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Enqueue",
-			Handler:       _Queue_Enqueue_Handler,
-			ClientStreams: true,
-		},
-		{
 			StreamName:    "Dequeue",
-			Handler:       _Queue_Dequeue_Handler,
+			Handler:       _Q_Dequeue_Handler,
 			ServerStreams: true,
 		},
 	},
