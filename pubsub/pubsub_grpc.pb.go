@@ -4,6 +4,7 @@ package pubsub
 
 import (
 	context "context"
+	msg "github.com/sasidakh/q/msg"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -18,8 +19,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PublisherClient interface {
-	Publish(ctx context.Context, in *Message, opts ...grpc.CallOption) (*PublishResult, error)
-	Subscribe(ctx context.Context, in *Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error)
+	Publish(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*PublishResult, error)
+	Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error)
 }
 
 type publisherClient struct {
@@ -30,7 +31,7 @@ func NewPublisherClient(cc grpc.ClientConnInterface) PublisherClient {
 	return &publisherClient{cc}
 }
 
-func (c *publisherClient) Publish(ctx context.Context, in *Message, opts ...grpc.CallOption) (*PublishResult, error) {
+func (c *publisherClient) Publish(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*PublishResult, error) {
 	out := new(PublishResult)
 	err := c.cc.Invoke(ctx, "/pubsub.Publisher/Publish", in, out, opts...)
 	if err != nil {
@@ -39,7 +40,7 @@ func (c *publisherClient) Publish(ctx context.Context, in *Message, opts ...grpc
 	return out, nil
 }
 
-func (c *publisherClient) Subscribe(ctx context.Context, in *Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error) {
+func (c *publisherClient) Subscribe(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Publisher_SubscribeClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Publisher_ServiceDesc.Streams[0], "/pubsub.Publisher/Subscribe", opts...)
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func (c *publisherClient) Subscribe(ctx context.Context, in *Queue, opts ...grpc
 }
 
 type Publisher_SubscribeClient interface {
-	Recv() (*Message, error)
+	Recv() (*msg.Message, error)
 	grpc.ClientStream
 }
 
@@ -63,8 +64,8 @@ type publisherSubscribeClient struct {
 	grpc.ClientStream
 }
 
-func (x *publisherSubscribeClient) Recv() (*Message, error) {
-	m := new(Message)
+func (x *publisherSubscribeClient) Recv() (*msg.Message, error) {
+	m := new(msg.Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -75,8 +76,8 @@ func (x *publisherSubscribeClient) Recv() (*Message, error) {
 // All implementations must embed UnimplementedPublisherServer
 // for forward compatibility
 type PublisherServer interface {
-	Publish(context.Context, *Message) (*PublishResult, error)
-	Subscribe(*Queue, Publisher_SubscribeServer) error
+	Publish(context.Context, *msg.Message) (*PublishResult, error)
+	Subscribe(*msg.Queue, Publisher_SubscribeServer) error
 	mustEmbedUnimplementedPublisherServer()
 }
 
@@ -84,10 +85,10 @@ type PublisherServer interface {
 type UnimplementedPublisherServer struct {
 }
 
-func (UnimplementedPublisherServer) Publish(context.Context, *Message) (*PublishResult, error) {
+func (UnimplementedPublisherServer) Publish(context.Context, *msg.Message) (*PublishResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Publish not implemented")
 }
-func (UnimplementedPublisherServer) Subscribe(*Queue, Publisher_SubscribeServer) error {
+func (UnimplementedPublisherServer) Subscribe(*msg.Queue, Publisher_SubscribeServer) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedPublisherServer) mustEmbedUnimplementedPublisherServer() {}
@@ -104,7 +105,7 @@ func RegisterPublisherServer(s grpc.ServiceRegistrar, srv PublisherServer) {
 }
 
 func _Publisher_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Message)
+	in := new(msg.Message)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -116,13 +117,13 @@ func _Publisher_Publish_Handler(srv interface{}, ctx context.Context, dec func(i
 		FullMethod: "/pubsub.Publisher/Publish",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PublisherServer).Publish(ctx, req.(*Message))
+		return srv.(PublisherServer).Publish(ctx, req.(*msg.Message))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Publisher_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Queue)
+	m := new(msg.Queue)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
@@ -130,7 +131,7 @@ func _Publisher_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) err
 }
 
 type Publisher_SubscribeServer interface {
-	Send(*Message) error
+	Send(*msg.Message) error
 	grpc.ServerStream
 }
 
@@ -138,7 +139,7 @@ type publisherSubscribeServer struct {
 	grpc.ServerStream
 }
 
-func (x *publisherSubscribeServer) Send(m *Message) error {
+func (x *publisherSubscribeServer) Send(m *msg.Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 

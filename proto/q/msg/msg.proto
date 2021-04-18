@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package msg;
+
+option go_package = "github.com/sasidakh/q/msg";
+
+message Queue {
+  string name = 1;
+}
+
+message Message {
+  Queue q = 1;
+  string data = 2;
+}
+
+message Ack {
+  Queue q = 1;
+  bool ok = 2;
+  string message = 3;
+}

@@ -4,27 +4,13 @@ package pubsub;
 
 option go_package = "github.com/sasidakh/pubsub";
 
-message Message {
-  string qname = 1;
-  string data = 2;
-}
-
-message Queue {
-  string qname = 1;
-}
-
-
-message Ack {
-  bool ok = 1;
-  string message = 2;
-}
+import "q/msg/msg.proto";
 
 message PublishResult {
-  string qname = 1;
-  Ack ack = 2;
+  msg.Ack ack = 1;
 }
 
 service Publisher {
-  rpc Publish(Message) returns (PublishResult);
-  rpc Subscribe(Queue) returns (stream Message);
+  rpc Publish(msg.Message) returns (PublishResult);
+  rpc Subscribe(msg.Queue) returns (stream msg.Message);
 }

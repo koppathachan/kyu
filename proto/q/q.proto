@@ -4,44 +4,19 @@ package q;
 
 option go_package = "github.com/sasidakh/q";
 
-message QueueDetails {
-  string qname = 1;
-}
-
-message Ack {
-  bool ok = 1;
-  string message = 2;
-}
+import "q/msg/msg.proto";
 
 message CreateResponse {
-  string qname = 1;
-  Ack ack = 2;
-}
-
-message Message {
-  string qname = 1;
-  string data = 2;
+  msg.Ack ack = 1 ;
 }
 
 message WriteResult {
-  string qname = 1;
-  Ack ack = 2;
-  uint32 count = 3;
-}
-
-enum Event {
-  ENQUEUE = 0;
-  DEQUEUE = 1;
-}
-
-message QueueEvent {
-  string qname = 1;
-  Event event = 2;
+  msg.Ack ack = 1;
+  uint32 count = 2;
 }
 
 service Queue {
-  rpc Create(QueueDetails) returns (CreateResponse);
-  rpc Enqueue(Message) returns (WriteResult);
-  rpc Dequeue(QueueDetails) returns (Message);
-  rpc Events(QueueDetails) returns (stream QueueEvent);
+  rpc Create(msg.Queue) returns (msg.Ack);
+  rpc Enqueue(stream msg.Message) returns (WriteResult);
+  rpc Dequeue(msg.Queue) returns (stream msg.Message);
 }
