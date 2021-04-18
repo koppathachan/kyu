@@ -5,14 +5,12 @@ docker-image:
 	make build
 	./scripts/docker-build.sh
 
-run-sub:
-	go run ./cmd/sub/sub.go
-run-pub:
-	go run ./cmd/pub/pub.go
+run-pubsub:
+	go run ./cmd/pubsub/pubsub.go
 run-q:
 	go run ./cmd/q/q.go
 
-run: run-q run-sub run-pub
+run: run-q run-pubsub
 
 watch:
 	ulimit -n 1000 #increase the file watch limit, might required on MacOS

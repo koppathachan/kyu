@@ -3,10 +3,9 @@ package q
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/sasidakh/kyu/q/msg"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Server struct {
@@ -56,7 +55,7 @@ func writeRes(qname string, len uint32) *WriteResult {
 			Q: &msg.Queue{
 				Name: qname,
 			},
-			Ok:      false,
+			Ok:      true,
 			Message: "SUCCESS",
 		},
 		Count: len,
@@ -77,14 +76,21 @@ func (s Server) Dequeue(q *msg.Queue, qs Q_DequeueServer) error {
 	if !ok {
 		return errors.New("NoQ")
 	}
-	for {
-		if len(qu.items) != 0 {
-			if err := qs.Send(&msg.Message{
-				Q:    q,
-				Data: qu.items[0],
-			}); err != nil {
-				qu.Dequeue()
+	waitc := make(chan msg.Message)
+	go func() {
+		for {
+			if len(qu.items) != 0 {
+				fmt.Println("sending message", qu)
+				if err := qs.Send(&msg.Message{
+					Q:    q,
+					Data: qu.items[0],
+				}); err == nil {
+					fmt.Println("dequeing")
+					qu.Dequeue()
+				}
 			}
 		}
-	}
+	}()
+	<-waitc
+	return nil
 }

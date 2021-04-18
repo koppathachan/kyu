@@ -16,7 +16,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	s := grpc.NewServer()
-	q.RegisterQueueServer(s, q.Server{})
+	q.RegisterQServer(s, q.Server{})
 	log.Println("Queue at : ", listner.Addr())
 	if err := s.Serve(listner); err != nil {
 		log.Fatalln(err)

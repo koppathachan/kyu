@@ -2,7 +2,8 @@ package pubsub
 
 import (
 	"context"
-	"time"
+	"fmt"
+	"io"
 
 	"log"
 
@@ -28,6 +29,9 @@ func (s Server) Publish(ctx context.Context, m *msg.Message) (*PublishResult, er
 		return nil, err
 	}
 	wr, err := c.Enqueue(ctx, m)
+	if err != nil {
+		return nil, err
+	}
 	return &PublishResult{
 		Ack: wr.Ack,
 	}, nil
@@ -40,13 +44,33 @@ func (s Server) Subscribe(qu *msg.Queue, ss PubSub_SubscribeServer) error {
 	}
 	defer conn.Close()
 	c := q.NewQClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	dqstream, err := c.Dequeue(ctx, qu)
-
-	for {
-		m, _ := dqstream.Recv()
-		ss.Send(m)
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	// defer cancel()
+	ack, err := c.Create(context.TODO(), qu)
+	if err != nil {
+		return err
 	}
+	fmt.Println(ack)
+	dqstream, err := c.Dequeue(context.TODO(), qu)
+	if err != nil {
+		return err
+	}
+	waitc := make(chan msg.Message)
+	go func() {
+		for {
+			m, err := dqstream.Recv()
+			if err == io.EOF {
+				close(waitc)
+				return
+			}
+			if err != nil {
+				fmt.Println("ERERRER", err)
+			}
+			if m != nil {
+				ss.Send(m)
+			}
+		}
+	}()
+	<-waitc
+	return nil
 }
