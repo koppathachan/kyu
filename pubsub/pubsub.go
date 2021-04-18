@@ -2,14 +2,9 @@ package pubsub
 
 import (
 	"context"
-	"fmt"
-	"io"
 
-	"log"
-
-	"github.com/sasidakh/kyu/q"
+	"github.com/sasidakh/kyu/pubsub/q"
 	"github.com/sasidakh/kyu/q/msg"
-	"google.golang.org/grpc"
 )
 
 type Server struct {
@@ -18,17 +13,7 @@ type Server struct {
 }
 
 func (s Server) Publish(ctx context.Context, m *msg.Message) (*PublishResult, error) {
-	conn, err := grpc.Dial(s.Qaddr, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-
-	c := q.NewQClient(conn)
-	if err != nil {
-		return nil, err
-	}
-	wr, err := c.Enqueue(ctx, m)
+	wr, err := q.Publish(s.Qaddr, m)
 	if err != nil {
 		return nil, err
 	}
@@ -38,39 +23,16 @@ func (s Server) Publish(ctx context.Context, m *msg.Message) (*PublishResult, er
 }
 
 func (s Server) Subscribe(qu *msg.Queue, ss PubSub_SubscribeServer) error {
-	conn, err := grpc.Dial(s.Qaddr, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := q.NewQClient(conn)
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	// defer cancel()
-	ack, err := c.Create(context.TODO(), qu)
+	ch, err := q.SubscribeChannel(s.Qaddr, qu)
 	if err != nil {
 		return err
 	}
-	fmt.Println(ack)
-	dqstream, err := c.Dequeue(context.TODO(), qu)
-	if err != nil {
-		return err
-	}
-	waitc := make(chan msg.Message)
-	go func() {
-		for {
-			m, err := dqstream.Recv()
-			if err == io.EOF {
-				close(waitc)
-				return
-			}
-			if err != nil {
-				fmt.Println("ERERRER", err)
-			}
-			if m != nil {
-				ss.Send(m)
+	for {
+		select {
+		case m := <-ch:
+			if err := ss.Send(m); err != nil {
+				return err
 			}
 		}
-	}()
-	<-waitc
-	return nil
+	}
 }

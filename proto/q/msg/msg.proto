@@ -10,7 +10,8 @@ message Queue {
 
 message Message {
   Queue q = 1;
-  string data = 2;
+  string id = 2;
+  string data = 3;
 }
 
 message Ack {

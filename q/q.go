@@ -2,10 +2,13 @@ package q
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log"
 
 	"github.com/sasidakh/kyu/q/msg"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Server struct {
@@ -29,23 +32,42 @@ func (qu *queue) Dequeue() string {
 
 var qmap map[string]*queue = make(map[string]*queue)
 
-func (s Server) Create(ctx context.Context, que *msg.Queue) (*msg.Ack, error) {
-	_, ok := qmap[que.Name]
-	if ok {
-		return &msg.Ack{
-			Q:       que,
-			Ok:      ok,
-			Message: "Exists",
-		}, nil
+var client *mongo.Client
+
+func getClient() *mongo.Client {
+	var err error
+	if client == nil {
+		client, err = mongo.NewClient(
+			options.Client().ApplyURI(
+				"mongodb://localhost:27017,localhost:27018,localhost:27019/queue?replicaSet=mongodb-replicaset",
+			),
+		)
+		if err != nil {
+			log.Panicln(err)
+		}
+		if err := client.Connect(context.Background()); err != nil {
+			log.Panicln(err)
+		}
+		log.Println("Connected to database")
 	}
-	qmap[que.Name] = &queue{
-		name:  que.Name,
-		items: []string{},
+	return client
+}
+
+func (s Server) Create(ctx context.Context, que *msg.Queue) (*msg.Ack, error) {
+	cl := getClient()
+	col := cl.Database("queue").Collection(que.Name)
+	fmt.Println("Creating queue", col.Name())
+	iname, err := col.Indexes().CreateOne(context.TODO(), mongo.IndexModel{
+		Keys:    bson.M{"Id": -1},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &msg.Ack{
 		Q:       que,
 		Ok:      true,
-		Message: "Created",
+		Message: iname,
 	}, nil
 }
 
@@ -63,34 +85,36 @@ func writeRes(qname string, len uint32) *WriteResult {
 }
 
 func (s Server) Enqueue(ctx context.Context, m *msg.Message) (*WriteResult, error) {
-	qu, ok := qmap[m.Q.Name]
-	if !ok {
-		return nil, errors.New("NoQ")
+	fmt.Println("enquququququ ", m)
+	cl := getClient()
+	col := cl.Database("queue").Collection(m.Q.Name)
+	res, err := col.InsertOne(context.TODO(), bson.D{
+		{Key: "Id", Value: m.Id},
+		{Key: "Data", Value: m.Data},
+	})
+	fmt.Println(res)
+	if err != nil {
+		return nil, err
 	}
-	qu.Enqueue(m.Data)
 	return writeRes(m.Q.Name, uint32(len(m.Data))), nil
 }
 
 func (s Server) Dequeue(q *msg.Queue, qs Q_DequeueServer) error {
-	qu, ok := qmap[q.Name]
-	if !ok {
-		return errors.New("NoQ")
+	cl := getClient()
+	col := cl.Database("queue").Collection(q.Name)
+	stream, err := col.Watch(context.TODO(), mongo.Pipeline{})
+	if err != nil {
+		return nil
 	}
-	waitc := make(chan msg.Message)
-	go func() {
-		for {
-			if len(qu.items) != 0 {
-				fmt.Println("sending message", qu)
-				if err := qs.Send(&msg.Message{
-					Q:    q,
-					Data: qu.items[0],
-				}); err == nil {
-					fmt.Println("dequeing")
-					qu.Dequeue()
-				}
-			}
+	defer stream.Close(context.TODO())
+	for stream.Next(context.TODO()) {
+		var m msg.Message
+		if err := stream.Decode(&m); err != nil {
+			log.Panicln(err)
 		}
-	}()
-	<-waitc
+		if err := qs.Send(&m); err != nil {
+			log.Panicln(err)
+		}
+	}
 	return nil
 }
