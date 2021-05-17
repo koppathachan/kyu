@@ -11,12 +11,13 @@ message CreateResponse {
 }
 
 message WriteResult {
-  msg.Ack ack = 1;
-  uint32 count = 2;
+  msg.Queue q = 1;
+  string id = 2;
+  uint32 count = 3;
 }
 
 service Q {
-  rpc Create(msg.Queue) returns (msg.Ack);
+  rpc Create(msg.Queue) returns (CreateResponse);
   rpc Enqueue(msg.Message) returns (WriteResult);
   rpc Dequeue(msg.Queue) returns (stream msg.Message);
 }

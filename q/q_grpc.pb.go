@@ -19,7 +19,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type QClient interface {
-	Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*msg.Ack, error)
+	Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*CreateResponse, error)
 	Enqueue(ctx context.Context, in *msg.Message, opts ...grpc.CallOption) (*WriteResult, error)
 	Dequeue(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (Q_DequeueClient, error)
 }
@@ -32,8 +32,8 @@ func NewQClient(cc grpc.ClientConnInterface) QClient {
 	return &qClient{cc}
 }
 
-func (c *qClient) Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*msg.Ack, error) {
-	out := new(msg.Ack)
+func (c *qClient) Create(ctx context.Context, in *msg.Queue, opts ...grpc.CallOption) (*CreateResponse, error) {
+	out := new(CreateResponse)
 	err := c.cc.Invoke(ctx, "/q.Q/Create", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (x *qDequeueClient) Recv() (*msg.Message, error) {
 // All implementations must embed UnimplementedQServer
 // for forward compatibility
 type QServer interface {
-	Create(context.Context, *msg.Queue) (*msg.Ack, error)
+	Create(context.Context, *msg.Queue) (*CreateResponse, error)
 	Enqueue(context.Context, *msg.Message) (*WriteResult, error)
 	Dequeue(*msg.Queue, Q_DequeueServer) error
 	mustEmbedUnimplementedQServer()
@@ -96,7 +96,7 @@ type QServer interface {
 type UnimplementedQServer struct {
 }
 
-func (UnimplementedQServer) Create(context.Context, *msg.Queue) (*msg.Ack, error) {
+func (UnimplementedQServer) Create(context.Context, *msg.Queue) (*CreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
 func (UnimplementedQServer) Enqueue(context.Context, *msg.Message) (*WriteResult, error) {
