@@ -2,6 +2,7 @@ package q
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/sasidakh/kyu/q/msg"
@@ -17,14 +18,17 @@ func New(s store.Store) Server {
 	return Server{s: s}
 }
 
-func (s Server) Create(ctx context.Context, m *msg.Queue) (*CreateResponse, error) {
-	if err := s.s.Create(ctx, m.Name, 256*20); err != nil {
+func (s Server) Create(ctx context.Context, mq *msg.Queue) (*CreateResponse, error) {
+	if err := s.s.Create(ctx, store.CreateOptions{
+		Size: 1073741824,
+		Name: mq.Name,
+	}); err != nil {
 		return nil, err
 	}
 	return &CreateResponse{
 		Ack: &msg.Ack{
 			Q: &msg.Queue{
-				Name: m.Name,
+				Name: mq.Name,
 			},
 			Ok: true,
 		},
@@ -62,9 +66,10 @@ func (s Server) Dequeue(qu *msg.Queue, qs Q_DequeueServer) error {
 				Data: m.Data,
 			}); err != nil {
 				// TODO: retry
-				log.Println(err)
+				log.Println("Error sending after dequeue", err)
 			} else {
 				// success mark as read
+				fmt.Println("MArkREAD  :  ", m)
 				go s.s.MarkRead(context.TODO(), m)
 			}
 		}

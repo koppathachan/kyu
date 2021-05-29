@@ -11,7 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const readCountZero = 1000000000
+const readCountZero = 1
 
 type Q struct {
 	Name string `json:"name"`
@@ -35,11 +35,16 @@ type ReadResult struct {
 	ID    string
 }
 
+type CreateOptions struct {
+	Size int64
+	Name string
+}
+
 type Store interface {
 	Insert(ctx context.Context, m Message) (*WriteResult, error)
 	Tail(name string) (chan Message, error)
 	MarkRead(ctx context.Context, m Message) (*ReadResult, error)
-	Create(ctx context.Context, name string, size int64) error
+	Create(ctx context.Context, opts CreateOptions) error
 }
 
 type store struct {
@@ -47,6 +52,7 @@ type store struct {
 	readCount uint64
 }
 
+// TODO: markread and find should be atomic
 func (s store) MarkRead(ctx context.Context, m Message) (*ReadResult, error) {
 	res, err := s.db.Collection(m.Q.Name).UpdateByID(ctx, m.ID, bson.D{{
 		Key: "$inc",
@@ -80,16 +86,16 @@ func (s store) Insert(ctx context.Context, m Message) (*WriteResult, error) {
 	}, nil
 }
 
-func (s store) Create(ctx context.Context, name string, size int64) error {
-	opts := options.CreateCollection().SetCapped(true).SetSizeInBytes(size)
-	if err := s.db.CreateCollection(ctx, name, opts); err != nil {
+func (s store) Create(ctx context.Context, co CreateOptions) error {
+	opts := options.CreateCollection().SetCapped(true).SetSizeInBytes(co.Size)
+	if err := s.db.CreateCollection(ctx, co.Name, opts); err != nil {
 		return err
 	}
 	oid := primitive.NewObjectID()
-	if _, err := s.db.Collection(name).InsertOne(ctx, Message{
+	if _, err := s.db.Collection(co.Name).InsertOne(ctx, Message{
 		ID:        &oid,
 		Data:      "",
-		Q:         Q{Name: name},
+		Q:         Q{Name: co.Name},
 		ReadCount: math.MaxInt64,
 	}); err != nil {
 		return err
