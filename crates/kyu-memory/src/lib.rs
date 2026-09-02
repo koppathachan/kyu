@@ -225,15 +225,18 @@ impl MemoryProvider {
         let lease_ttl = req.lease_ttl.unwrap_or(config.default_lease_ttl);
         let leased_at = SystemTime::now();
         let mut store = self.messages();
+        // §3.4: a message at the limit is dead-lettered rather than delivered
+        // again; §3.6: with dead-lettering off it is deleted instead.
         for message in store.iter_mut() {
             if message.queue_id == req.queue_id
                 && message.is_eligible_at(leased_at)
                 && message.delivery_count >= config.max_deliveries
             {
-                // §3.4: a message at the limit is dead-lettered rather than
-                // delivered again.
                 message.dead_lettered = true;
             }
+        }
+        if !config.dead_letter_enabled {
+            store.retain(|message| !message.dead_lettered);
         }
 
         let mut candidates: Vec<usize> = store
@@ -308,6 +311,7 @@ impl MemoryProvider {
             .settlements
             .into_iter()
             .map(|settlement| {
+                let config = self.queue_config(&settlement.queue_id).ok();
                 // §7 batch rule: item-level problems are reported per item, and
                 // a rejected item leaves its message untouched.
                 let held = store.iter().position(|message| {
@@ -324,6 +328,7 @@ impl MemoryProvider {
                     };
                 };
 
+                let dead_letter_enabled = config.is_some_and(|config| config.dead_letter_enabled);
                 match settlement.outcome {
                     Outcome::AckDelete => {
                         store.remove(index);
@@ -339,10 +344,14 @@ impl MemoryProvider {
                     // §3.6: a forced dead-letter applies regardless of
                     // delivery_count.
                     Outcome::DeadLetter => {
-                        let message = &mut store[index];
-                        message.leased_until = None;
-                        message.lease_token = None;
-                        message.dead_lettered = true;
+                        if dead_letter_enabled {
+                            let message = &mut store[index];
+                            message.leased_until = None;
+                            message.lease_token = None;
+                            message.dead_lettered = true;
+                        } else {
+                            store.remove(index);
+                        }
                     }
                     Outcome::Unspecified => {}
                 }

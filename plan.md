@@ -115,7 +115,7 @@ The test list. This file is the work queue.
 - [x] a dead-lettered message is never delivered again
 - [x] a message reaching `max_deliveries` by nack moves to `DEAD_LETTER`
 - [x] a forced dead-letter settlement moves a message below `max_deliveries` to `DEAD_LETTER`
-- [ ] with `dead_letter_enabled` false a dead-lettered message is deleted instead
+- [x] with `dead_letter_enabled` false a dead-lettered message is deleted instead
 
 <!-- §8.1.9 — Batch settle -->
 

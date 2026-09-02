@@ -131,3 +131,43 @@ fn a_forced_dead_letter_works_below_the_delivery_limit() {
     assert_eq!(lease(&provider, "orders", Duration::from_secs(30)).len(), 0);
     assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
 }
+
+#[test]
+fn with_dead_letter_disabled_a_message_at_the_limit_is_deleted() {
+    let provider = provider_with_queue("orders", 1, false);
+    save(&provider, "orders");
+    lease(&provider, "orders", Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    lease(&provider, "orders", Duration::from_secs(1));
+
+    let stats = stats(&provider, "orders");
+    assert_eq!(stats.dead_letter_count, 0);
+    assert_eq!(stats.ready_count, 0);
+    assert_eq!(stats.leased_count, 0);
+}
+
+#[test]
+fn with_dead_letter_disabled_a_forced_dead_letter_deletes_the_message() {
+    let provider = provider_with_queue("orders", 5, false);
+    save(&provider, "orders");
+    let leased = lease(&provider, "orders", Duration::from_secs(30)).remove(0);
+
+    provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: leased.message_id.clone(),
+                lease_token: leased.lease_token.clone(),
+                outcome: Outcome::DeadLetter,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    let stats = stats(&provider, "orders");
+    assert_eq!(stats.dead_letter_count, 0);
+    assert_eq!(stats.leased_count, 0);
+    assert_eq!(stats.ready_count, 0);
+}
