@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, LeaseMessagesRequest, RenewLeaseRequest, SaveMessageRequest,
-    SettleMessagesRequest, StorageQueueConfig,
+    EnsureQueueRequest, Error, LeaseMessagesRequest, Outcome, RenewLeaseRequest,
+    SaveMessageRequest, SettleMessagesRequest, StorageQueueConfig, StorageSettlement,
 };
 use kyu_memory::MemoryProvider;
 
@@ -292,4 +292,36 @@ fn an_empty_settlement_list_fails_validation() {
         .expect_err("§4: empty ⇒ VALIDATION_FAILED");
 
     assert_eq!(error, Error::validation_failed());
+}
+
+#[test]
+fn more_than_one_thousand_settlements_fail_validation() {
+    let provider = provider_with_queue("orders");
+
+    let settlements = |count| {
+        (0..count)
+            .map(|i| StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: format!("{i}"),
+                lease_token: String::new(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            })
+            .collect()
+    };
+
+    let error = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: settlements(1001),
+        })
+        .expect_err("over the 1000 item limit");
+
+    assert_eq!(error, Error::validation_failed());
+    // 1000 is the limit, not one past it.
+    provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: settlements(1000),
+        })
+        .expect("1000 is legal");
 }

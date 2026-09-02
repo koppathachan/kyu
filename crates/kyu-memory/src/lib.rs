@@ -38,6 +38,8 @@ mod limits {
     pub const LEASE_TTL_MIN: Duration = Duration::from_secs(1);
     /// `lease_ttl`: at most 12 hours.
     pub const LEASE_TTL_MAX: Duration = Duration::from_secs(12 * 60 * 60);
+    /// `settlements`: 1000 items per batch, and never empty.
+    pub const SETTLEMENTS: usize = 1000;
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -375,7 +377,7 @@ impl MemoryProvider {
     pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
         // §4: an empty settlement list is a request-level error, not an empty
         // result.
-        if req.settlements.is_empty() {
+        if req.settlements.is_empty() || req.settlements.len() > limits::SETTLEMENTS {
             return Err(Error::validation_failed());
         }
         let now = SystemTime::now();
