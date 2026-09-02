@@ -135,3 +135,26 @@ fn save_attributes(
         })
         .map(|_| ())
 }
+
+#[test]
+fn an_oversized_idempotency_key_fails_validation() {
+    let provider = provider_with_queue("orders");
+
+    let error = provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            idempotency_key: "k".repeat(257),
+            ..SaveMessageRequest::default()
+        })
+        .expect_err("over the 256 byte limit");
+
+    assert_eq!(error, Error::validation_failed());
+    // 256 bytes is the limit, not one past it.
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            idempotency_key: "k".repeat(256),
+            ..SaveMessageRequest::default()
+        })
+        .expect("256 bytes is legal");
+}

@@ -28,6 +28,8 @@ mod limits {
     /// `attributes`: 4 KiB total serialised, measured as the sum of key and
     /// value byte lengths.
     pub const ATTRIBUTE_BYTES: usize = 4 * 1024;
+    /// `idempotency_key`: 256 bytes. Empty means no deduplication.
+    pub const IDEMPOTENCY_KEY_BYTES: usize = 256;
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -217,6 +219,9 @@ impl MemoryProvider {
         if req.attributes.len() > limits::ATTRIBUTE_ENTRIES
             || attributes_bytes > limits::ATTRIBUTE_BYTES
         {
+            return Err(Error::validation_failed());
+        }
+        if req.idempotency_key.len() > limits::IDEMPOTENCY_KEY_BYTES {
             return Err(Error::validation_failed());
         }
 
