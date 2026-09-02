@@ -30,6 +30,8 @@ struct Message {
     priority: i32,
     attributes: HashMap<String, String>,
     delivery_count: i32,
+    /// `Some` while a lease is outstanding; the instant it expires (§3.3).
+    leased_until: Option<SystemTime>,
 }
 
 impl MemoryProvider {
@@ -119,6 +121,7 @@ impl MemoryProvider {
             priority: req.priority,
             attributes: req.attributes,
             delivery_count: 0,
+            leased_until: None,
         });
         Ok(SaveMessageResponse {
             message_id: id,
@@ -135,9 +138,15 @@ impl MemoryProvider {
         let messages = self
             .messages()
             .iter_mut()
-            .filter(|message| message.queue_id == req.queue_id)
+            .filter(|message| {
+                message.queue_id == req.queue_id
+                    && message
+                        .leased_until
+                        .is_none_or(|expires_at| expires_at <= leased_at)
+            })
             .map(|message| {
                 message.delivery_count += 1;
+                message.leased_until = Some(leased_at + lease_ttl);
                 LeasedMessage {
                     message_id: message.id.clone(),
                     queue_id: message.queue_id.clone(),

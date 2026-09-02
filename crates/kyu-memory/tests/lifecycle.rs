@@ -237,3 +237,32 @@ fn leasing_without_a_ttl_uses_the_queues_default_lease_ttl() {
     assert!(expires_at >= before + Duration::from_secs(30));
     assert!(expires_at <= after + Duration::from_secs(30));
 }
+
+#[test]
+fn a_message_with_a_live_lease_is_not_returned_to_a_second_leaser() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let first = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(600)),
+        })
+        .expect("first lease");
+    assert_eq!(first.messages.len(), 1);
+
+    let second = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(600)),
+        })
+        .expect("second lease");
+
+    assert!(second.messages.is_empty());
+}

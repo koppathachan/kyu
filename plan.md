@@ -65,7 +65,7 @@ The test list. This file is the work queue.
 - [x] a leased message carries a non-empty lease token
 - [x] a leased message's lease expires at now plus the requested lease ttl
 - [x] leasing without a lease ttl uses the queue's `default_lease_ttl`
-- [ ] a message with a live lease is not returned to a second leaser
+- [x] a message with a live lease is not returned to a second leaser
 - [ ] leasing returns no more messages than the requested batch size
 - [ ] acking a leased message reports OK
 - [ ] acking a leased message removes it from the queue
