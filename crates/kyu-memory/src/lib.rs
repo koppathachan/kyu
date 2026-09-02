@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, ListQueuesRequest,
-    ListQueuesResponse, Result, StorageQueueConfig,
+    ListQueuesResponse, Result, SaveMessageRequest, SaveMessageResponse, StorageQueueConfig,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -70,6 +70,14 @@ impl MemoryProvider {
             queues: page,
             next_page_token,
         })
+    }
+
+    pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
+        if !self.queues().contains_key(&req.queue_id) {
+            return Err(Error::queue_not_found());
+        }
+        // No test demands the success path yet.
+        todo!("save into a known queue")
     }
 
     pub fn get_provider_info(

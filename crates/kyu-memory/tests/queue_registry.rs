@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, GetQueueConfigRequest, ListQueuesRequest, StorageQueueConfig,
+    EnsureQueueRequest, Error, GetQueueConfigRequest, ListQueuesRequest, SaveMessageRequest,
+    StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 
@@ -174,4 +175,18 @@ fn listing_queues_continues_from_the_previous_pages_token() {
         .collect();
     seen.sort();
     assert_eq!(seen, ["orders", "payments", "shipments"]);
+}
+
+#[test]
+fn saving_to_an_unknown_queue_fails_queue_not_found() {
+    let provider = MemoryProvider::new();
+
+    let error = provider
+        .save_message(SaveMessageRequest {
+            queue_id: "nonexistent".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect_err("unknown queue");
+
+    assert_eq!(error, Error::queue_not_found());
 }
