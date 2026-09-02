@@ -11,6 +11,6 @@ description = "In-memory Kyu v1 storage provider."
 conformance = []
 
 [dependencies]
-
-[dev-dependencies]
+# `MemoryProvider` implements `kyu_conformance::StorageProvider`, so the
+# contract crate is part of this crate's public API, not just its tests.
 kyu-conformance = { path = "../kyu-conformance" }
