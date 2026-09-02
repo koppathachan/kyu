@@ -321,6 +321,7 @@ dependencies = [
 name = "kyu-proto"
 version = "0.1.0"
 dependencies = [
+ "kyu-conformance",
  "prost",
  "prost-types",
  "protox",

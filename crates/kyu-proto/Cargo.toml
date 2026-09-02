@@ -6,6 +6,7 @@ license.workspace = true
 description = "Generated Rust types for kyu.storage.v1, compiled from spec/kyu/storage/v1/storage.proto."
 
 [dependencies]
+kyu-conformance = { path = "../kyu-conformance" }
 prost = "0.14"
 prost-types = "0.14"
 # `default-features = false` keeps the generated service definitions without

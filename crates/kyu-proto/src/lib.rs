@@ -6,6 +6,8 @@
 //! is the `StorageProvider` trait in `kyu-conformance`; see `kyu-memory` for the
 //! adapter that proves the two agree.
 
+pub mod convert;
+
 #[allow(clippy::all, clippy::pedantic, rustdoc::all)]
 pub mod storage {
     include!(concat!(env!("OUT_DIR"), "/kyu.storage.v1.rs"));
