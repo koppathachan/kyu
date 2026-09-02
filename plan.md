@@ -74,7 +74,7 @@ The test list. This file is the work queue.
 
 <!-- §8.1.2 — Deduplication -->
 
-- [ ] saving with an idempotency key reports `deduplicated` false
+- [x] saving with an idempotency key reports `deduplicated` false
 - [ ] saving again with the same key inside the dedup window returns the original message id
 - [ ] saving again with the same key inside the dedup window reports `deduplicated` true
 - [ ] saving again with the same key inside the dedup window stores no second message
