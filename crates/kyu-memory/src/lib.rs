@@ -158,7 +158,7 @@ impl MemoryProvider {
             return Ok(SaveMessageResponse {
                 message_id: original.clone(),
                 saved_at: SystemTime::now(),
-                deduplicated: false,
+                deduplicated: true,
             });
         }
 

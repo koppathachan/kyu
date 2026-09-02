@@ -52,3 +52,13 @@ fn a_duplicate_save_inside_the_window_returns_the_original_message_id() {
 
     assert_eq!(duplicate, original);
 }
+
+#[test]
+fn a_duplicate_save_inside_the_window_reports_deduplicated() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    save_with_key(&provider, "orders", "key-1");
+
+    let (_, deduplicated) = save_with_key(&provider, "orders", "key-1");
+
+    assert!(deduplicated);
+}
