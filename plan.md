@@ -25,7 +25,7 @@ The test list. This file is the work queue.
 - [x] a `Duration` converts to its proto form and back
 - [x] a `SystemTime` converts to a proto `Timestamp` and back
 - [x] an absent proto `Duration` converts to `None`
-- [ ] `MessageState` converts to its proto enum and back
+- [x] `MessageState` converts to its proto enum and back
 - [ ] `Outcome` converts to its proto enum and back
 - [ ] an unspecified proto `Outcome` converts to `Outcome::Unspecified`
 - [ ] an spi `Error` converts to a `tonic::Status` with the same code

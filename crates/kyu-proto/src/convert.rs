@@ -6,6 +6,8 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use kyu_conformance::spi;
+
 /// `std::time::Duration` -> `google.protobuf.Duration`.
 pub fn duration_to_proto(duration: Duration) -> prost_types::Duration {
     prost_types::Duration {
@@ -38,4 +40,24 @@ pub fn timestamp_to_proto(instant: SystemTime) -> prost_types::Timestamp {
 pub fn timestamp_from_proto(instant: Option<prost_types::Timestamp>) -> Option<SystemTime> {
     let instant = instant?;
     Some(UNIX_EPOCH + Duration::new(instant.seconds as u64, instant.nanos as u32))
+}
+
+/// `spi::MessageState` -> `kyu.storage.v1.MessageState`.
+pub fn message_state_to_proto(state: spi::MessageState) -> crate::storage::MessageState {
+    match state {
+        spi::MessageState::Unspecified => crate::storage::MessageState::Unspecified,
+        spi::MessageState::Ready => crate::storage::MessageState::Ready,
+        spi::MessageState::Leased => crate::storage::MessageState::Leased,
+        spi::MessageState::DeadLetter => crate::storage::MessageState::DeadLetter,
+    }
+}
+
+/// `kyu.storage.v1.MessageState` -> `spi::MessageState`.
+pub fn message_state_from_proto(state: crate::storage::MessageState) -> spi::MessageState {
+    match state {
+        crate::storage::MessageState::Unspecified => spi::MessageState::Unspecified,
+        crate::storage::MessageState::Ready => spi::MessageState::Ready,
+        crate::storage::MessageState::Leased => spi::MessageState::Leased,
+        crate::storage::MessageState::DeadLetter => spi::MessageState::DeadLetter,
+    }
 }
