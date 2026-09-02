@@ -1,0 +1,57 @@
+schema: spec-driven
+
+context: |
+  Kyu v1 — storage provider. Building ONE component of the Kyu message-queue
+  platform: the in-memory implementation of the storage provider SPI.
+
+  `spec/protocol.md` is the normative contract and the only source of truth. It
+  is the full Kyu v1 protocol specification reduced to the sections that bind a
+  provider (§1-4, §6, §7, §8.1, §9), with the original section numbers kept so
+  cross-references inside it still resolve.
+
+  §8.1 is the definition of done — thirteen provider conformance requirements,
+  and nothing outside them. The queue engine (§5, §8.2), the Postgres provider,
+  and cross-language binding are out of scope: do not build or plan for them.
+
+  Stack:
+  - Rust, edition 2024, stable toolchain. Cargo workspace, no async runtime.
+  - crates/kyu-conformance/  the contract as code. `spi.rs` is §6's proto
+                             transcribed method-for-method into a native trait;
+                             `scenarios.rs` is §8.1 as executable checks.
+  - crates/kyu-memory/       the deliverable. Currently empty.
+
+  Fixed boundaries — not open to design:
+  - `crates/kyu-conformance/` and `crates/kyu-memory/tests/conformance.rs` are a
+    FIXED ORACLE. Never edit, weaken, extend or reorder them. If a scenario looks
+    wrong, say so and stop rather than adjusting it.
+  - The public entry point must be `kyu_memory::MemoryProvider::new()`, and it
+    implements `kyu_conformance::StorageProvider`.
+  - The `conformance` cargo feature exists only so `cargo test` works before the
+    provider compiles. It is harness, not product.
+
+  Where the difficulty actually is, per the spec:
+  - §8.1.8, concurrency — 32 concurrent leasers against one queue of 1000
+    messages, every message acked exactly once, zero double-delivery while leases
+    are live. Rust has no `-race`; this is verified by running it for real.
+  - §3.3, lease token rotation and the finality of expiry.
+  - §3.4 and §3.6, the interaction between `max_deliveries`, lease expiry, nack
+    and dead-lettering — a message must never be delivered past its limit.
+  - §3.7, dedup records outliving the messages they refer to.
+
+  Commands:
+    cargo test                                        # your tests
+    cargo test -p kyu-memory --features conformance   # the acceptance suite
+    cargo clippy --all-targets -- -D warnings
+    cargo fmt --all
+
+  Conventions: conventional commits; clippy clean before any commit.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
