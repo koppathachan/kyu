@@ -19,8 +19,8 @@ use kyu_conformance::spi::{
 pub struct MemoryProvider {
     queues: Mutex<HashMap<String, StorageQueueConfig>>,
     messages: Mutex<Vec<Message>>,
-    /// `(queue_id, idempotency_key)` -> the original `message_id` (§3.7).
-    dedup: Mutex<HashMap<(String, String), String>>,
+    /// `(queue_id, idempotency_key)` -> the original save (§3.7).
+    dedup: Mutex<HashMap<(String, String), DedupRecord>>,
     next_message_id: AtomicU64,
     next_lease_token: AtomicU64,
 }
@@ -36,6 +36,14 @@ struct Message {
     delivery_count: i32,
     /// `Some` while a lease is outstanding; the instant it expires (§3.3).
     leased_until: Option<SystemTime>,
+}
+
+/// The original save behind an idempotency key. The window runs from
+/// `saved_at`, not from the last duplicate attempt (§3.7).
+#[derive(Debug, Clone)]
+struct DedupRecord {
+    message_id: String,
+    saved_at: SystemTime,
 }
 
 impl Message {
@@ -54,7 +62,7 @@ impl MemoryProvider {
         self.messages.lock().expect("messages mutex")
     }
 
-    fn dedup(&self) -> MutexGuard<'_, HashMap<(String, String), String>> {
+    fn dedup(&self) -> MutexGuard<'_, HashMap<(String, String), DedupRecord>> {
         self.dedup.lock().expect("dedup mutex")
     }
 
@@ -150,14 +158,18 @@ impl MemoryProvider {
     }
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
-        self.require_queue(&req.queue_id)?;
+        let config = self.queue_config(&req.queue_id)?;
         let dedup_key = (req.queue_id.clone(), req.idempotency_key.clone());
+        let saved_at = SystemTime::now();
         if !req.idempotency_key.is_empty()
             && let Some(original) = self.dedup().get(&dedup_key)
+            && saved_at
+                .duration_since(original.saved_at)
+                .is_ok_and(|elapsed| elapsed < config.dedup_window)
         {
             return Ok(SaveMessageResponse {
-                message_id: original.clone(),
-                saved_at: SystemTime::now(),
+                message_id: original.message_id.clone(),
+                saved_at,
                 deduplicated: true,
             });
         }
@@ -167,7 +179,13 @@ impl MemoryProvider {
             .fetch_add(1, Ordering::Relaxed)
             .to_string();
         if !req.idempotency_key.is_empty() {
-            self.dedup().insert(dedup_key, id.clone());
+            self.dedup().insert(
+                dedup_key,
+                DedupRecord {
+                    message_id: id.clone(),
+                    saved_at,
+                },
+            );
         }
         self.messages().push(Message {
             id: id.clone(),
@@ -180,7 +198,7 @@ impl MemoryProvider {
         });
         Ok(SaveMessageResponse {
             message_id: id,
-            saved_at: SystemTime::now(),
+            saved_at,
             deduplicated: false,
         })
     }

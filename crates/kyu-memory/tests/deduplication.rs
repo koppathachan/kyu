@@ -79,3 +79,15 @@ fn a_duplicate_save_inside_the_window_stores_no_second_message() {
         .expect("get_queue_stats");
     assert_eq!(stats.ready_count, 1);
 }
+
+#[test]
+fn the_same_key_after_the_window_produces_a_new_message_id() {
+    let provider = provider_with_queue("orders", Duration::from_millis(200));
+    let (original, _) = save_with_key(&provider, "orders", "key-1");
+
+    std::thread::sleep(Duration::from_millis(250));
+    let (later, deduplicated) = save_with_key(&provider, "orders", "key-1");
+
+    assert_ne!(later, original);
+    assert!(!deduplicated);
+}
