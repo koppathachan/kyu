@@ -108,6 +108,10 @@ impl MemoryProvider {
         if queue_id.is_empty() || queue_id.len() > limits::QUEUE_ID_BYTES {
             return Err(Error::validation_failed());
         }
+        // §4: max_deliveries MUST be >= 1.
+        if req.config.max_deliveries < 1 {
+            return Err(Error::validation_failed());
+        }
 
         let mut queues = self.queues();
         let created = !queues.contains_key(&req.config.queue_id);

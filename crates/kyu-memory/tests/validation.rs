@@ -37,3 +37,17 @@ fn an_empty_or_oversized_queue_id_fails_validation() {
         })
         .expect("256 bytes is legal");
 }
+
+#[test]
+fn max_deliveries_below_one_fails_validation() {
+    let provider = MemoryProvider::new();
+
+    for max_deliveries in [0, -1] {
+        let mut invalid = config("orders");
+        invalid.max_deliveries = max_deliveries;
+        let error = provider
+            .ensure_queue(EnsureQueueRequest { config: invalid })
+            .expect_err("max_deliveries must be >= 1");
+        assert_eq!(error, Error::validation_failed(), "{max_deliveries}");
+    }
+}
