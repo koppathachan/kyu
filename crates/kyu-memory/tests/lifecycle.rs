@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, LeaseMessagesRequest, Outcome, SaveMessageRequest, SettleMessagesRequest,
-    StorageQueueConfig, StorageSettlement, code,
+    EnsureQueueRequest, GetQueueStatsRequest, LeaseMessagesRequest, Outcome, SaveMessageRequest,
+    SettleMessagesRequest, StorageQueueConfig, StorageSettlement, code,
 };
 use kyu_memory::MemoryProvider;
 
@@ -365,4 +365,23 @@ fn acking_a_leased_message_removes_it_from_the_queue() {
         .expect("lease after ack");
 
     assert!(after.messages.is_empty());
+}
+
+#[test]
+fn queue_stats_count_a_saved_message_as_ready() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+
+    assert_eq!(stats.ready_count, 1);
 }

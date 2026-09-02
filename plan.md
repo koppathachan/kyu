@@ -69,7 +69,7 @@ The test list. This file is the work queue.
 - [x] leasing returns no more messages than the requested batch size
 - [x] acking a leased message reports OK
 - [x] acking a leased message removes it from the queue
-- [ ] queue stats count a saved message as ready
+- [x] queue stats count a saved message as ready
 - [ ] queue stats count a leased message as leased
 
 <!-- §8.1.2 — Deduplication -->
