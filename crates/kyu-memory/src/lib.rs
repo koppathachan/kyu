@@ -348,6 +348,10 @@ impl MemoryProvider {
     }
 
     pub fn renew_lease(&self, req: RenewLeaseRequest) -> Result<RenewLeaseResponse> {
+        // §4: an extension is bounded the same way a lease_ttl is.
+        if req.extension < limits::LEASE_TTL_MIN || req.extension > limits::LEASE_TTL_MAX {
+            return Err(Error::validation_failed());
+        }
         let mut store = self.messages();
         let message = store
             .iter_mut()

@@ -148,7 +148,7 @@ The test list. This file is the work queue.
 - [x] a batch size of zero leases at most one message
 - [x] a batch size over 100 fails `VALIDATION_FAILED`
 - [x] a lease ttl outside 1 second to 12 hours fails `VALIDATION_FAILED`
-- [ ] a renew extension outside 1 second to 12 hours fails `VALIDATION_FAILED`
+- [x] a renew extension outside 1 second to 12 hours fails `VALIDATION_FAILED`
 - [ ] an empty settlement list fails `VALIDATION_FAILED`
 - [ ] more than 1000 settlements fails `VALIDATION_FAILED`
 - [ ] a retry delay over 12 hours fails `VALIDATION_FAILED`

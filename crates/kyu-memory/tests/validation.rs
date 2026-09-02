@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+    EnsureQueueRequest, Error, LeaseMessagesRequest, RenewLeaseRequest, SaveMessageRequest,
+    StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 
@@ -234,4 +235,48 @@ fn lease_with_ttl(provider: &MemoryProvider, lease_ttl: Duration) -> Result<(), 
             lease_ttl: Some(lease_ttl),
         })
         .map(|_| ())
+}
+
+#[test]
+fn a_renew_extension_outside_one_second_to_twelve_hours_fails_validation() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages")
+        .messages
+        .remove(0);
+
+    let renew = |extension| {
+        provider
+            .renew_lease(RenewLeaseRequest {
+                queue_id: "orders".to_string(),
+                message_id: leased.message_id.clone(),
+                lease_token: leased.lease_token.clone(),
+                extension,
+            })
+            .map(|_| ())
+    };
+
+    for extension in [
+        Duration::from_millis(999),
+        Duration::from_secs(12 * 60 * 60) + Duration::from_secs(1),
+    ] {
+        let error = renew(extension).expect_err("extension out of range");
+        assert_eq!(error, Error::validation_failed(), "{extension:?}");
+    }
+
+    // Both ends of the range are legal, not one past them.
+    for extension in [Duration::from_secs(1), Duration::from_secs(12 * 60 * 60)] {
+        renew(extension).expect("at the boundary");
+    }
 }
