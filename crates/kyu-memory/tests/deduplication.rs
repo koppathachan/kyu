@@ -42,3 +42,13 @@ fn a_first_save_with_an_idempotency_key_is_not_deduplicated() {
 
     assert!(!deduplicated);
 }
+
+#[test]
+fn a_duplicate_save_inside_the_window_returns_the_original_message_id() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    let (original, _) = save_with_key(&provider, "orders", "key-1");
+
+    let (duplicate, _) = save_with_key(&provider, "orders", "key-1");
+
+    assert_eq!(duplicate, original);
+}

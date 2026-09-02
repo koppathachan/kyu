@@ -19,6 +19,8 @@ use kyu_conformance::spi::{
 pub struct MemoryProvider {
     queues: Mutex<HashMap<String, StorageQueueConfig>>,
     messages: Mutex<Vec<Message>>,
+    /// `(queue_id, idempotency_key)` -> the original `message_id` (§3.7).
+    dedup: Mutex<HashMap<(String, String), String>>,
     next_message_id: AtomicU64,
     next_lease_token: AtomicU64,
 }
@@ -50,6 +52,10 @@ impl MemoryProvider {
 
     fn messages(&self) -> MutexGuard<'_, Vec<Message>> {
         self.messages.lock().expect("messages mutex")
+    }
+
+    fn dedup(&self) -> MutexGuard<'_, HashMap<(String, String), String>> {
+        self.dedup.lock().expect("dedup mutex")
     }
 
     fn queues(&self) -> MutexGuard<'_, HashMap<String, StorageQueueConfig>> {
@@ -145,10 +151,24 @@ impl MemoryProvider {
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
         self.require_queue(&req.queue_id)?;
+        let dedup_key = (req.queue_id.clone(), req.idempotency_key.clone());
+        if !req.idempotency_key.is_empty()
+            && let Some(original) = self.dedup().get(&dedup_key)
+        {
+            return Ok(SaveMessageResponse {
+                message_id: original.clone(),
+                saved_at: SystemTime::now(),
+                deduplicated: false,
+            });
+        }
+
         let id = self
             .next_message_id
             .fetch_add(1, Ordering::Relaxed)
             .to_string();
+        if !req.idempotency_key.is_empty() {
+            self.dedup().insert(dedup_key, id.clone());
+        }
         self.messages().push(Message {
             id: id.clone(),
             queue_id: req.queue_id,
