@@ -11,6 +11,4 @@ description = "In-memory Kyu v1 storage provider."
 conformance = []
 
 [dependencies]
-
-[dev-dependencies]
 kyu-conformance = { path = "../kyu-conformance" }
