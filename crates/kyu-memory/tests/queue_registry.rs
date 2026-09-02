@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, GetQueueConfigRequest, StorageQueueConfig};
+use kyu_conformance::spi::{EnsureQueueRequest, Error, GetQueueConfigRequest, StorageQueueConfig};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -84,4 +84,17 @@ fn getting_a_queues_config_returns_what_it_was_ensured_with() {
         .expect("get_queue_config");
 
     assert_eq!(response.config, stored);
+}
+
+#[test]
+fn getting_the_config_of_an_unknown_queue_fails_queue_not_found() {
+    let provider = MemoryProvider::new();
+
+    let error = provider
+        .get_queue_config(GetQueueConfigRequest {
+            queue_id: "nonexistent".to_string(),
+        })
+        .expect_err("unknown queue");
+
+    assert_eq!(error, Error::queue_not_found());
 }

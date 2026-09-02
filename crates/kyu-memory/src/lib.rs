@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use kyu_conformance::spi::{
-    CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, GetProviderInfoRequest,
+    CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, Result,
     StorageQueueConfig,
 };
@@ -34,7 +34,10 @@ impl MemoryProvider {
 
     pub fn get_queue_config(&self, req: GetQueueConfigRequest) -> Result<GetQueueConfigResponse> {
         let queues = self.queues.lock().expect("queues mutex");
-        let config = queues.get(&req.queue_id).expect("queue").clone();
+        let config = queues
+            .get(&req.queue_id)
+            .cloned()
+            .ok_or_else(Error::queue_not_found)?;
         Ok(GetQueueConfigResponse { config })
     }
 
