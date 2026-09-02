@@ -57,3 +57,23 @@ fn leasing_from_one_queue_never_returns_another_queues_messages() {
     assert_eq!(leased[0].queue_id, "orders");
     assert_eq!(leased[0].payload, b"order");
 }
+
+#[test]
+fn deleting_a_queue_removes_its_messages_and_reports_the_purged_count() {
+    let provider = provider_with_queues(&["orders"]);
+    save(&provider, "orders", b"one");
+    save(&provider, "orders", b"two");
+
+    let response = provider
+        .delete_queue(DeleteQueueRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("delete_queue");
+
+    assert_eq!(response.purged_message_count, 2);
+    provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect_err("the queue is gone");
+}

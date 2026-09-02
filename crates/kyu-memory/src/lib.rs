@@ -6,12 +6,13 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::SystemTime;
 
 use kyu_conformance::spi::{
-    CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
-    GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, GetQueueStatsRequest,
-    GetQueueStatsResponse, LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage,
-    ListQueuesRequest, ListQueuesResponse, Outcome, RenewLeaseRequest, RenewLeaseResponse, Result,
-    SaveMessageRequest, SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse,
-    SettlementResult, StorageQueueConfig, code, reason,
+    CONTRACT_VERSION, DeleteQueueRequest, DeleteQueueResponse, EnsureQueueRequest,
+    EnsureQueueResponse, Error, GetProviderInfoRequest, GetProviderInfoResponse,
+    GetQueueConfigRequest, GetQueueConfigResponse, GetQueueStatsRequest, GetQueueStatsResponse,
+    LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage, ListQueuesRequest,
+    ListQueuesResponse, Outcome, RenewLeaseRequest, RenewLeaseResponse, Result, SaveMessageRequest,
+    SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse, SettlementResult,
+    StorageQueueConfig, code, reason,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -139,6 +140,18 @@ impl MemoryProvider {
         Ok(ListQueuesResponse {
             queues: page,
             next_page_token,
+        })
+    }
+
+    pub fn delete_queue(&self, req: DeleteQueueRequest) -> Result<DeleteQueueResponse> {
+        self.require_queue(&req.queue_id)?;
+        let mut store = self.messages();
+        let before = store.len();
+        store.retain(|message| message.queue_id != req.queue_id);
+        let purged_message_count = (before - store.len()) as i64;
+        self.queues().remove(&req.queue_id);
+        Ok(DeleteQueueResponse {
+            purged_message_count,
         })
     }
 
