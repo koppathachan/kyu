@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, SaveMessageRequest, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, GetQueueStatsRequest, SaveMessageRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn provider_with_queue(queue_id: &str, dedup_window: Duration) -> MemoryProvider {
@@ -61,4 +63,19 @@ fn a_duplicate_save_inside_the_window_reports_deduplicated() {
     let (_, deduplicated) = save_with_key(&provider, "orders", "key-1");
 
     assert!(deduplicated);
+}
+
+#[test]
+fn a_duplicate_save_inside_the_window_stores_no_second_message() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    save_with_key(&provider, "orders", "key-1");
+
+    save_with_key(&provider, "orders", "key-1");
+
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+    assert_eq!(stats.ready_count, 1);
 }
