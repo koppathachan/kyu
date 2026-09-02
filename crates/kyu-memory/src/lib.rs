@@ -112,14 +112,26 @@ impl MemoryProvider {
 
     pub fn get_queue_stats(&self, req: GetQueueStatsRequest) -> Result<GetQueueStatsResponse> {
         self.require_queue(&req.queue_id)?;
-        let ready_count = self
+        let now = SystemTime::now();
+        let mut ready_count = 0;
+        let mut leased_count = 0;
+        for message in self
             .messages()
             .iter()
             .filter(|message| message.queue_id == req.queue_id)
-            .count() as i64;
+        {
+            if message
+                .leased_until
+                .is_some_and(|expires_at| expires_at > now)
+            {
+                leased_count += 1;
+            } else {
+                ready_count += 1;
+            }
+        }
         Ok(GetQueueStatsResponse {
             ready_count,
-            leased_count: 0,
+            leased_count,
             dead_letter_count: 0,
         })
     }

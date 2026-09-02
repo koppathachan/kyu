@@ -385,3 +385,30 @@ fn queue_stats_count_a_saved_message_as_ready() {
 
     assert_eq!(stats.ready_count, 1);
 }
+
+#[test]
+fn queue_stats_count_a_leased_message_as_leased() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(600)),
+        })
+        .expect("lease_messages");
+
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+
+    assert_eq!(stats.leased_count, 1);
+    assert_eq!(stats.ready_count, 0);
+}

@@ -70,7 +70,7 @@ The test list. This file is the work queue.
 - [x] acking a leased message reports OK
 - [x] acking a leased message removes it from the queue
 - [x] queue stats count a saved message as ready
-- [ ] queue stats count a leased message as leased
+- [x] queue stats count a leased message as leased
 
 <!-- §8.1.2 — Deduplication -->
 
