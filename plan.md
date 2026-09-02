@@ -85,7 +85,7 @@ The test list. This file is the work queue.
 
 <!-- §8.1.10 — Visibility delay -->
 
-- [ ] a message saved with a visibility delay is not leasable before the delay elapses, then is
+- [x] a message saved with a visibility delay is not leasable before the delay elapses, then is
 
 <!-- §8.1.7 — Priority and ordering (§3.2) -->
 

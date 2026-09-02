@@ -34,6 +34,8 @@ struct Message {
     priority: i32,
     attributes: HashMap<String, String>,
     delivery_count: i32,
+    /// When the message becomes eligible for delivery (§3.2).
+    visible_at: SystemTime,
     /// `Some` while a lease is outstanding; the instant it expires (§3.3).
     leased_until: Option<SystemTime>,
 }
@@ -50,6 +52,11 @@ impl Message {
     /// Whether a lease on this message is still live at `now` (§3.3.6).
     fn is_leased_at(&self, now: SystemTime) -> bool {
         self.leased_until.is_some_and(|expires_at| expires_at > now)
+    }
+
+    /// Whether the message may be delivered at `now` (§3.2).
+    fn is_eligible_at(&self, now: SystemTime) -> bool {
+        self.visible_at <= now && !self.is_leased_at(now)
     }
 }
 
@@ -194,6 +201,7 @@ impl MemoryProvider {
             priority: req.priority,
             attributes: req.attributes,
             delivery_count: 0,
+            visible_at: saved_at + req.visibility_delay.unwrap_or_default(),
             leased_until: None,
         });
         Ok(SaveMessageResponse {
@@ -211,7 +219,7 @@ impl MemoryProvider {
         let messages = self
             .messages()
             .iter_mut()
-            .filter(|message| message.queue_id == req.queue_id && !message.is_leased_at(leased_at))
+            .filter(|message| message.queue_id == req.queue_id && message.is_eligible_at(leased_at))
             .take(req.batch_size as usize)
             .map(|message| {
                 message.delivery_count += 1;
