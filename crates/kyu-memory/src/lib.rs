@@ -26,6 +26,7 @@ struct Message {
     id: String,
     queue_id: String,
     payload: Vec<u8>,
+    priority: i32,
     attributes: HashMap<String, String>,
 }
 
@@ -109,6 +110,7 @@ impl MemoryProvider {
             id: id.clone(),
             queue_id: req.queue_id,
             payload: req.payload,
+            priority: req.priority,
             attributes: req.attributes,
         });
         Ok(SaveMessageResponse {
@@ -128,7 +130,7 @@ impl MemoryProvider {
                 message_id: message.id.clone(),
                 queue_id: message.queue_id.clone(),
                 payload: message.payload.clone(),
-                priority: 0,
+                priority: message.priority,
                 delivery_count: 0,
                 lease_token: String::new(),
                 lease_expires_at: SystemTime::now(),

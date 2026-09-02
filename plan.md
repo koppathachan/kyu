@@ -59,7 +59,7 @@ The test list. This file is the work queue.
 - [x] leasing from a queue with no messages returns no messages
 - [x] leasing returns a saved message with its payload
 - [x] a leased message carries the attributes it was saved with
-- [ ] a leased message carries the priority it was saved with
+- [x] a leased message carries the priority it was saved with
 - [ ] a leased message carries the queue id it was saved to
 - [ ] a leased message reports `delivery_count` 1 on its first delivery
 - [ ] a leased message carries a non-empty lease token
