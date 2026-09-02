@@ -392,7 +392,8 @@ impl MemoryProvider {
         let now = SystemTime::now();
         let mut returned_to_ready = 0;
         let mut moved_to_dead_letter = 0;
-        for message in self.messages().iter_mut() {
+        let mut store = self.messages();
+        for message in store.iter_mut() {
             if message.dead_lettered {
                 continue;
             }
@@ -418,6 +419,14 @@ impl MemoryProvider {
                 returned_to_ready += 1;
             }
         }
+        // §3.6: with dead-lettering off the message is deleted instead.
+        store.retain(|message| {
+            !message.dead_lettered
+                || self
+                    .queue_config(&message.queue_id)
+                    .is_ok_and(|config| config.dead_letter_enabled)
+        });
+
         Ok(ReapExpiredLeasesResponse {
             returned_to_ready,
             moved_to_dead_letter,

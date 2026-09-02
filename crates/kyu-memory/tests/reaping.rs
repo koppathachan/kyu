@@ -9,6 +9,14 @@ use kyu_conformance::spi::{
 use kyu_memory::MemoryProvider;
 
 fn provider_with_queue(queue_id: &str, max_deliveries: i32) -> MemoryProvider {
+    provider_with_queue_config(queue_id, max_deliveries, true)
+}
+
+fn provider_with_queue_config(
+    queue_id: &str,
+    max_deliveries: i32,
+    dead_letter_enabled: bool,
+) -> MemoryProvider {
     let provider = MemoryProvider::new();
     provider
         .ensure_queue(EnsureQueueRequest {
@@ -19,7 +27,7 @@ fn provider_with_queue(queue_id: &str, max_deliveries: i32) -> MemoryProvider {
                 retry_backoff_base: Duration::from_secs(1),
                 retry_backoff_max: Duration::from_secs(60),
                 dedup_window: Duration::from_secs(300),
-                dead_letter_enabled: true,
+                dead_letter_enabled,
             },
         })
         .expect("ensure_queue");
@@ -117,4 +125,25 @@ fn reap_with_a_grace_period_leaves_recently_expired_leases_alone() {
 
     assert_eq!(reaped.returned_to_ready, 0);
     assert_eq!(reaped.moved_to_dead_letter, 0);
+}
+
+#[test]
+fn reap_deletes_rather_than_dead_letters_when_dead_lettering_is_off() {
+    let provider = provider_with_queue_config("orders", 1, false);
+    save_and_lease(&provider, "orders", 1, Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    let reaped = provider
+        .reap_expired_leases(ReapExpiredLeasesRequest {
+            grace_period: Duration::ZERO,
+        })
+        .expect("reap_expired_leases");
+
+    // §3.6: the dead-letter disposition still happened, it just materialised as
+    // a delete, so it is still reported under moved_to_dead_letter.
+    assert_eq!(reaped.moved_to_dead_letter, 1);
+    let stats = stats(&provider, "orders");
+    assert_eq!(stats.dead_letter_count, 0);
+    assert_eq!(stats.ready_count, 0);
+    assert_eq!(stats.leased_count, 0);
 }
