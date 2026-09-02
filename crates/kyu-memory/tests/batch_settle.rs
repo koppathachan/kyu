@@ -77,3 +77,31 @@ fn settling_returns_one_result_per_settlement_in_request_order() {
         .collect();
     assert_eq!(returned, expected);
 }
+
+#[test]
+fn a_mixed_batch_applies_the_valid_item_and_leaves_the_stale_one_alone() {
+    let provider = provider_with_queue("orders");
+    let leased = save_and_lease(&provider, "orders", 2);
+    let (valid, untouched) = (&leased[0], &leased[1]);
+    let mut stale = ack(untouched);
+    stale.lease_token = "not-the-current-token".to_string();
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![ack(valid), stale],
+        })
+        .expect("settle_messages");
+
+    assert_eq!(response.results[0].code, code::OK);
+    assert_eq!(response.results[1].code, code::FAILED_PRECONDITION);
+    assert_eq!(response.results[1].error_reason, reason::LEASE_LOST);
+
+    // The valid ack deleted its message; the stale one is still leased.
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+    assert_eq!(stats.leased_count, 1);
+    assert_eq!(stats.ready_count, 0);
+}
