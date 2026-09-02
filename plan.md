@@ -18,7 +18,7 @@ The test list. This file is the work queue.
 
 <!-- §8.1.13 — Provider info -->
 
-- [ ] `get_provider_info` reports `contract_version` "kyu.storage.v1"
+- [x] `get_provider_info` reports `contract_version` "kyu.storage.v1"
 
 <!-- Queue registry — prerequisite for §8.1.1 and §8.1.11; error codes per §7 -->
 
