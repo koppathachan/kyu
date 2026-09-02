@@ -102,7 +102,7 @@ The test list. This file is the work queue.
 
 - [x] renewing with the current token extends the lease to now plus the extension, token unchanged
 - [x] renewing with a rotated or expired token fails `LEASE_LOST` and changes nothing
-- [ ] settling with a rotated token reports `LEASE_LOST` and changes nothing
+- [x] settling with a rotated token reports `LEASE_LOST` and changes nothing
 
 <!-- §8.1.5 — Retry delay -->
 

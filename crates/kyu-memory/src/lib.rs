@@ -11,7 +11,7 @@ use kyu_conformance::spi::{
     GetQueueStatsResponse, LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage,
     ListQueuesRequest, ListQueuesResponse, Outcome, RenewLeaseRequest, RenewLeaseResponse, Result,
     SaveMessageRequest, SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse,
-    SettlementResult, StorageQueueConfig, code,
+    SettlementResult, StorageQueueConfig, code, reason,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -289,13 +289,29 @@ impl MemoryProvider {
     }
 
     pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
-        let mut messages = self.messages();
+        let now = SystemTime::now();
+        let mut store = self.messages();
         let results = req
             .settlements
             .into_iter()
             .map(|settlement| {
+                // §7 batch rule: item-level problems are reported per item, and
+                // a rejected item leaves its message untouched.
+                let held = store.iter().any(|message| {
+                    message.queue_id == settlement.queue_id
+                        && message.id == settlement.message_id
+                        && message.is_leased_at(now)
+                        && message.lease_token.as_deref() == Some(&settlement.lease_token)
+                });
+                if !held {
+                    return SettlementResult {
+                        message_id: settlement.message_id,
+                        code: code::FAILED_PRECONDITION,
+                        error_reason: reason::LEASE_LOST.to_string(),
+                    };
+                }
                 if settlement.outcome == Outcome::AckDelete {
-                    messages.retain(|message| message.id != settlement.message_id);
+                    store.retain(|message| message.id != settlement.message_id);
                 }
                 SettlementResult {
                     message_id: settlement.message_id,

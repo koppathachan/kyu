@@ -3,8 +3,9 @@
 use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, LeaseMessagesRequest, LeasedMessage, RenewLeaseRequest,
-    SaveMessageRequest, StorageQueueConfig,
+    EnsureQueueRequest, Error, GetQueueStatsRequest, LeaseMessagesRequest, LeasedMessage, Outcome,
+    RenewLeaseRequest, SaveMessageRequest, SettleMessagesRequest, StorageQueueConfig,
+    StorageSettlement, code, reason,
 };
 use kyu_memory::MemoryProvider;
 
@@ -112,4 +113,41 @@ fn renewing_an_expired_lease_fails_lease_lost() {
 
     let error = renew(&provider, &leased, &leased.lease_token).expect_err("expired lease");
     assert_eq!(error, Error::lease_lost());
+}
+
+#[test]
+fn settling_with_a_rotated_token_reports_lease_lost_and_changes_nothing() {
+    let provider = provider_with_queue("orders");
+    let first = save_and_lease(&provider, "orders", Duration::from_secs(1));
+    std::thread::sleep(Duration::from_millis(1_100));
+    provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(30)),
+        })
+        .expect("redelivery");
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: first.message_id.clone(),
+                lease_token: first.lease_token.clone(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    assert_eq!(response.results[0].code, code::FAILED_PRECONDITION);
+    assert_eq!(response.results[0].error_reason, reason::LEASE_LOST);
+    // Untouched: the ack did not delete it.
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+    assert_eq!(stats.leased_count, 1);
 }
