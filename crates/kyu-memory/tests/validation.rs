@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kyu_conformance::spi::{
     EnsureQueueRequest, Error, LeaseMessagesRequest, RenewLeaseRequest, SaveMessageRequest,
-    StorageQueueConfig,
+    SettleMessagesRequest, StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 
@@ -279,4 +279,17 @@ fn a_renew_extension_outside_one_second_to_twelve_hours_fails_validation() {
     for extension in [Duration::from_secs(1), Duration::from_secs(12 * 60 * 60)] {
         renew(extension).expect("at the boundary");
     }
+}
+
+#[test]
+fn an_empty_settlement_list_fails_validation() {
+    let provider = provider_with_queue("orders");
+
+    let error = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: Vec::new(),
+        })
+        .expect_err("§4: empty ⇒ VALIDATION_FAILED");
+
+    assert_eq!(error, Error::validation_failed());
 }

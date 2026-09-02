@@ -373,6 +373,11 @@ impl MemoryProvider {
     }
 
     pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
+        // §4: an empty settlement list is a request-level error, not an empty
+        // result.
+        if req.settlements.is_empty() {
+            return Err(Error::validation_failed());
+        }
         let now = SystemTime::now();
         let mut store = self.messages();
         let results = req
