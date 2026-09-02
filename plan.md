@@ -36,7 +36,7 @@ The test list. This file is the work queue.
 <!-- §8.1.1 — Lifecycle: save → lease → ack -->
 
 - [x] saving a message to a queue returns a message id
-- [ ] leasing from a queue with no messages returns no messages
+- [x] leasing from a queue with no messages returns no messages
 - [ ] leasing returns a saved message with its payload
 - [ ] a leased message carries the attributes it was saved with
 - [ ] a leased message carries the priority it was saved with

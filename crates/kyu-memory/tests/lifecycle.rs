@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, SaveMessageRequest, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn provider_with_queue(queue_id: &str) -> MemoryProvider {
@@ -36,4 +38,19 @@ fn saving_a_message_returns_a_message_id() {
         .expect("save_message");
 
     assert!(!response.message_id.is_empty());
+}
+
+#[test]
+fn leasing_from_an_empty_queue_returns_no_messages() {
+    let provider = provider_with_queue("orders");
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert!(response.messages.is_empty());
 }

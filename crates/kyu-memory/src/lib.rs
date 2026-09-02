@@ -99,8 +99,7 @@ impl MemoryProvider {
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         self.require_queue(&req.queue_id)?;
-        // No test demands leasing from a known queue yet.
-        todo!("lease from a known queue")
+        Ok(LeaseMessagesResponse::default())
     }
 
     pub fn get_provider_info(
