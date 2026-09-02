@@ -181,10 +181,13 @@ impl MemoryProvider {
             });
         }
 
-        let id = self
-            .next_message_id
-            .fetch_add(1, Ordering::Relaxed)
-            .to_string();
+        // §2: ids are opaque, at most 128 chars, and SHOULD sort by creation
+        // time because §3.2 uses them as the ordering tiebreak. Zero-padding
+        // makes the counter sort lexicographically as well as numerically.
+        let id = format!(
+            "{:020}",
+            self.next_message_id.fetch_add(1, Ordering::Relaxed)
+        );
         if !req.idempotency_key.is_empty() {
             self.dedup().insert(
                 dedup_key,
