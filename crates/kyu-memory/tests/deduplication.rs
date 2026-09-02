@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, GetQueueStatsRequest, SaveMessageRequest, StorageQueueConfig,
+    EnsureQueueRequest, GetQueueStatsRequest, LeaseMessagesRequest, Outcome, SaveMessageRequest,
+    SettleMessagesRequest, StorageQueueConfig, StorageSettlement,
 };
 use kyu_memory::MemoryProvider;
 
@@ -90,4 +91,35 @@ fn the_same_key_after_the_window_produces_a_new_message_id() {
 
     assert_ne!(later, original);
     assert!(!deduplicated);
+}
+
+#[test]
+fn a_duplicate_save_still_returns_the_original_id_after_the_message_was_acked() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    let (original, _) = save_with_key(&provider, "orders", "key-1");
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+    let message = &leased.messages[0];
+    provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: message.message_id.clone(),
+                lease_token: message.lease_token.clone(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    let (duplicate, deduplicated) = save_with_key(&provider, "orders", "key-1");
+
+    assert_eq!(duplicate, original);
+    assert!(deduplicated);
 }

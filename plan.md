@@ -79,7 +79,7 @@ The test list. This file is the work queue.
 - [x] saving again with the same key inside the dedup window reports `deduplicated` true
 - [x] saving again with the same key inside the dedup window stores no second message
 - [x] saving with the same key after the dedup window has passed returns a new message id
-- [ ] a duplicate save inside the window returns the original id even after that message was acked
+- [x] a duplicate save inside the window returns the original id even after that message was acked
 - [ ] saving with an empty idempotency key never deduplicates
 - [ ] the same idempotency key in two queues produces two messages
 
