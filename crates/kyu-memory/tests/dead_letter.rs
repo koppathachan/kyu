@@ -106,3 +106,28 @@ fn a_message_reaching_max_deliveries_by_nack_is_dead_lettered() {
     assert_eq!(lease(&provider, "orders", Duration::from_secs(30)).len(), 0);
     assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
 }
+
+#[test]
+fn a_forced_dead_letter_works_below_the_delivery_limit() {
+    // max_deliveries 5, one delivery so far: nowhere near the limit.
+    let provider = provider_with_queue("orders", 5, true);
+    save(&provider, "orders");
+    let leased = lease(&provider, "orders", Duration::from_secs(30)).remove(0);
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: leased.message_id.clone(),
+                lease_token: leased.lease_token.clone(),
+                outcome: Outcome::DeadLetter,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: "poison".to_string(),
+            }],
+        })
+        .expect("settle_messages");
+    assert_eq!(response.results[0].code, 0);
+
+    assert_eq!(lease(&provider, "orders", Duration::from_secs(30)).len(), 0);
+    assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
+}

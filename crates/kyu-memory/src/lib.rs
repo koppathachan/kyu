@@ -336,7 +336,15 @@ impl MemoryProvider {
                         message.lease_token = None;
                         message.visible_at = now + settlement.retry_delay;
                     }
-                    _ => {}
+                    // §3.6: a forced dead-letter applies regardless of
+                    // delivery_count.
+                    Outcome::DeadLetter => {
+                        let message = &mut store[index];
+                        message.leased_until = None;
+                        message.lease_token = None;
+                        message.dead_lettered = true;
+                    }
+                    Outcome::Unspecified => {}
                 }
                 SettlementResult {
                     message_id: settlement.message_id,
