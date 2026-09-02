@@ -23,6 +23,11 @@ mod limits {
     pub const QUEUE_ID_BYTES: usize = 256;
     /// `payload`: 1 MiB. An empty payload is legal.
     pub const PAYLOAD_BYTES: usize = 1024 * 1024;
+    /// `attributes`: 16 entries, budgeted separately from the payload.
+    pub const ATTRIBUTE_ENTRIES: usize = 16;
+    /// `attributes`: 4 KiB total serialised, measured as the sum of key and
+    /// value byte lengths.
+    pub const ATTRIBUTE_BYTES: usize = 4 * 1024;
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -202,6 +207,16 @@ impl MemoryProvider {
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
         if req.payload.len() > limits::PAYLOAD_BYTES {
+            return Err(Error::validation_failed());
+        }
+        let attributes_bytes: usize = req
+            .attributes
+            .iter()
+            .map(|(key, value)| key.len() + value.len())
+            .sum();
+        if req.attributes.len() > limits::ATTRIBUTE_ENTRIES
+            || attributes_bytes > limits::ATTRIBUTE_BYTES
+        {
             return Err(Error::validation_failed());
         }
 

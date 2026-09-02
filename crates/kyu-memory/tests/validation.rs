@@ -1,5 +1,6 @@
 //! Protocol specification §4 — limits and validation.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use kyu_conformance::spi::{EnsureQueueRequest, Error, SaveMessageRequest, StorageQueueConfig};
@@ -96,4 +97,41 @@ fn a_payload_over_one_mebibyte_fails_validation() {
             ..SaveMessageRequest::default()
         })
         .expect("1 MiB is legal");
+}
+
+#[test]
+fn oversized_attributes_fail_validation() {
+    let provider = provider_with_queue("orders");
+
+    let too_many: HashMap<String, String> = (0..17)
+        .map(|i| (format!("k{i}"), "v".to_string()))
+        .collect();
+    assert_eq!(
+        save_attributes(&provider, too_many).expect_err("17 entries"),
+        Error::validation_failed()
+    );
+
+    let too_big: HashMap<String, String> = HashMap::from([("k".to_string(), "v".repeat(4 * 1024))]);
+    assert_eq!(
+        save_attributes(&provider, too_big).expect_err("over 4 KiB serialised"),
+        Error::validation_failed()
+    );
+
+    let at_the_limit: HashMap<String, String> = (0..16)
+        .map(|i| (format!("k{i}"), "v".to_string()))
+        .collect();
+    save_attributes(&provider, at_the_limit).expect("16 small entries are legal");
+}
+
+fn save_attributes(
+    provider: &MemoryProvider,
+    attributes: HashMap<String, String>,
+) -> Result<(), Error> {
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            attributes,
+            ..SaveMessageRequest::default()
+        })
+        .map(|_| ())
 }
