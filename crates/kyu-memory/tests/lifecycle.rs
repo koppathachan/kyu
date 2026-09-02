@@ -324,3 +324,45 @@ fn acking_a_leased_message_reports_ok() {
 
     assert_eq!(response.results[0].code, code::OK);
 }
+
+#[test]
+fn acking_a_leased_message_removes_it_from_the_queue() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(1)),
+        })
+        .expect("lease_messages");
+    let message = &leased.messages[0];
+    provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: message.message_id.clone(),
+                lease_token: message.lease_token.clone(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    let after = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease after ack");
+
+    assert!(after.messages.is_empty());
+}

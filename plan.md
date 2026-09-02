@@ -68,7 +68,7 @@ The test list. This file is the work queue.
 - [x] a message with a live lease is not returned to a second leaser
 - [x] leasing returns no more messages than the requested batch size
 - [x] acking a leased message reports OK
-- [ ] acking a leased message removes it from the queue
+- [x] acking a leased message removes it from the queue
 - [ ] queue stats count a saved message as ready
 - [ ] queue stats count a leased message as leased
 

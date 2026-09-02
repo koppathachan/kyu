@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, LeaseMessagesRequest,
-    LeaseMessagesResponse, LeasedMessage, ListQueuesRequest, ListQueuesResponse, Result,
+    LeaseMessagesResponse, LeasedMessage, ListQueuesRequest, ListQueuesResponse, Outcome, Result,
     SaveMessageRequest, SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse,
     SettlementResult, StorageQueueConfig, code,
 };
@@ -165,13 +165,19 @@ impl MemoryProvider {
     }
 
     pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
+        let mut messages = self.messages();
         let results = req
             .settlements
             .into_iter()
-            .map(|settlement| SettlementResult {
-                message_id: settlement.message_id,
-                code: code::OK,
-                error_reason: String::new(),
+            .map(|settlement| {
+                if settlement.outcome == Outcome::AckDelete {
+                    messages.retain(|message| message.id != settlement.message_id);
+                }
+                SettlementResult {
+                    message_id: settlement.message_id,
+                    code: code::OK,
+                    error_reason: String::new(),
+                }
             })
             .collect();
         Ok(SettleMessagesResponse { results })
