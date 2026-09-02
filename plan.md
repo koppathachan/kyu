@@ -62,7 +62,7 @@ The test list. This file is the work queue.
 - [x] a leased message carries the priority it was saved with
 - [x] a leased message carries the queue id it was saved to
 - [x] a leased message reports `delivery_count` 1 on its first delivery
-- [ ] a leased message carries a non-empty lease token
+- [x] a leased message carries a non-empty lease token
 - [ ] a leased message's lease expires at now plus the requested lease ttl
 - [ ] leasing without a lease ttl uses the queue's `default_lease_ttl`
 - [ ] a message with a live lease is not returned to a second leaser

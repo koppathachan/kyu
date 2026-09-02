@@ -18,6 +18,7 @@ pub struct MemoryProvider {
     queues: Mutex<HashMap<String, StorageQueueConfig>>,
     messages: Mutex<Vec<Message>>,
     next_message_id: AtomicU64,
+    next_lease_token: AtomicU64,
 }
 
 /// A message as the provider holds it.
@@ -124,6 +125,7 @@ impl MemoryProvider {
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         self.require_queue(&req.queue_id)?;
+        let next_lease_token = &self.next_lease_token;
         let messages = self
             .messages()
             .iter_mut()
@@ -136,7 +138,7 @@ impl MemoryProvider {
                     payload: message.payload.clone(),
                     priority: message.priority,
                     delivery_count: message.delivery_count,
-                    lease_token: String::new(),
+                    lease_token: next_lease_token.fetch_add(1, Ordering::Relaxed).to_string(),
                     lease_expires_at: SystemTime::now(),
                     attributes: message.attributes.clone(),
                 }

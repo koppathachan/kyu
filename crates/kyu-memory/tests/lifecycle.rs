@@ -165,3 +165,24 @@ fn a_leased_message_reports_delivery_count_one_on_first_delivery() {
 
     assert_eq!(response.messages[0].delivery_count, 1);
 }
+
+#[test]
+fn a_leased_message_carries_a_non_empty_lease_token() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert!(!response.messages[0].lease_token.is_empty());
+}
