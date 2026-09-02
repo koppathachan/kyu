@@ -47,11 +47,15 @@ impl MemoryProvider {
 
     /// Fails `QUEUE_NOT_FOUND` (§7) unless the queue has been ensured.
     fn require_queue(&self, queue_id: &str) -> Result<()> {
-        if self.queues().contains_key(queue_id) {
-            Ok(())
-        } else {
-            Err(Error::queue_not_found())
-        }
+        self.queue_config(queue_id).map(|_| ())
+    }
+
+    /// The stored config, or `QUEUE_NOT_FOUND` (§7).
+    fn queue_config(&self, queue_id: &str) -> Result<StorageQueueConfig> {
+        self.queues()
+            .get(queue_id)
+            .cloned()
+            .ok_or_else(Error::queue_not_found)
     }
 
     pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
