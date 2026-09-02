@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, Error, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, Error, SaveMessageRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -50,4 +52,27 @@ fn max_deliveries_below_one_fails_validation() {
             .expect_err("max_deliveries must be >= 1");
         assert_eq!(error, Error::validation_failed(), "{max_deliveries}");
     }
+}
+
+fn provider_with_queue(queue_id: &str) -> MemoryProvider {
+    let provider = MemoryProvider::new();
+    provider
+        .ensure_queue(EnsureQueueRequest {
+            config: config(queue_id),
+        })
+        .expect("ensure_queue");
+    provider
+}
+
+#[test]
+fn an_empty_payload_is_accepted() {
+    let provider = provider_with_queue("orders");
+
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            payload: Vec::new(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("§4: an empty payload is legal");
 }
