@@ -90,7 +90,7 @@ The test list. This file is the work queue.
 <!-- §8.1.7 — Priority and ordering (§3.2) -->
 
 - [x] message ids are lexicographically ordered by creation time
-- [ ] among visible messages the highest priority is delivered first
+- [x] among visible messages the highest priority is delivered first
 - [ ] ties are broken by earliest `visible_at`, then by lowest message id
 
 <!-- §8.1.3 — Lease expiry -->

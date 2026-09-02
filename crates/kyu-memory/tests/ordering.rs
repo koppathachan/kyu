@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, SaveMessageRequest, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn provider_with_queue(queue_id: &str) -> MemoryProvider {
@@ -45,4 +47,29 @@ fn message_ids_are_lexicographically_ordered_by_creation_time() {
     let mut sorted = ids.clone();
     sorted.sort();
     assert_eq!(ids, sorted);
+}
+
+fn lease_ids(provider: &MemoryProvider, queue_id: &str, batch_size: i32) -> Vec<String> {
+    provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: queue_id.to_string(),
+            batch_size,
+            lease_ttl: None,
+        })
+        .expect("lease_messages")
+        .messages
+        .into_iter()
+        .map(|message| message.message_id)
+        .collect()
+}
+
+#[test]
+fn the_highest_priority_visible_message_is_delivered_first() {
+    let provider = provider_with_queue("orders");
+    let low = save(&provider, "orders", 1);
+    let high = save(&provider, "orders", 9);
+
+    let delivered = lease_ids(&provider, "orders", 2);
+
+    assert_eq!(delivered, [high, low]);
 }

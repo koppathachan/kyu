@@ -1,5 +1,6 @@
 //! In-memory Kyu v1 storage provider.
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -218,13 +219,24 @@ impl MemoryProvider {
         let config = self.queue_config(&req.queue_id)?;
         let lease_ttl = req.lease_ttl.unwrap_or(config.default_lease_ttl);
         let leased_at = SystemTime::now();
-        let next_lease_token = &self.next_lease_token;
-        let messages = self
-            .messages()
-            .iter_mut()
-            .filter(|message| message.queue_id == req.queue_id && message.is_eligible_at(leased_at))
-            .take(req.batch_size as usize)
-            .map(|message| {
+        let mut store = self.messages();
+
+        let mut candidates: Vec<usize> = store
+            .iter()
+            .enumerate()
+            .filter(|(_, message)| {
+                message.queue_id == req.queue_id && message.is_eligible_at(leased_at)
+            })
+            .map(|(index, _)| index)
+            .collect();
+        // §3.2: priority DESC first.
+        candidates.sort_by_key(|&index| Reverse(store[index].priority));
+        candidates.truncate(req.batch_size as usize);
+
+        let messages = candidates
+            .into_iter()
+            .map(|index| {
+                let message = &mut store[index];
                 message.delivery_count += 1;
                 message.leased_until = Some(leased_at + lease_ttl);
                 LeasedMessage {
@@ -233,7 +245,10 @@ impl MemoryProvider {
                     payload: message.payload.clone(),
                     priority: message.priority,
                     delivery_count: message.delivery_count,
-                    lease_token: next_lease_token.fetch_add(1, Ordering::Relaxed).to_string(),
+                    lease_token: self
+                        .next_lease_token
+                        .fetch_add(1, Ordering::Relaxed)
+                        .to_string(),
                     lease_expires_at: leased_at + lease_ttl,
                     attributes: message.attributes.clone(),
                 }
