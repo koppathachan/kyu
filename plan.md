@@ -121,7 +121,7 @@ The test list. This file is the work queue.
 
 - [x] settling returns one result per settlement, in request order
 - [x] a batch mixing a valid and a stale settlement applies the valid one and leaves the stale one alone
-- [ ] settling a message that does not exist reports `MESSAGE_NOT_FOUND`
+- [x] settling a message that does not exist reports `MESSAGE_NOT_FOUND`
 
 <!-- §8.1.11 — Queue isolation -->
 

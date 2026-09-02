@@ -314,19 +314,25 @@ impl MemoryProvider {
                 let config = self.queue_config(&settlement.queue_id).ok();
                 // §7 batch rule: item-level problems are reported per item, and
                 // a rejected item leaves its message untouched.
-                let held = store.iter().position(|message| {
-                    message.queue_id == settlement.queue_id
-                        && message.id == settlement.message_id
-                        && message.is_leased_at(now)
-                        && message.lease_token.as_deref() == Some(&settlement.lease_token)
+                let found = store.iter().position(|message| {
+                    message.queue_id == settlement.queue_id && message.id == settlement.message_id
                 });
-                let Some(index) = held else {
+                let Some(index) = found else {
+                    return SettlementResult {
+                        message_id: settlement.message_id,
+                        code: code::NOT_FOUND,
+                        error_reason: reason::MESSAGE_NOT_FOUND.to_string(),
+                    };
+                };
+                let held = store[index].is_leased_at(now)
+                    && store[index].lease_token.as_deref() == Some(&settlement.lease_token);
+                if !held {
                     return SettlementResult {
                         message_id: settlement.message_id,
                         code: code::FAILED_PRECONDITION,
                         error_reason: reason::LEASE_LOST.to_string(),
                     };
-                };
+                }
 
                 let dead_letter_enabled = config.is_some_and(|config| config.dead_letter_enabled);
                 match settlement.outcome {

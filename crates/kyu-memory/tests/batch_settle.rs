@@ -105,3 +105,24 @@ fn a_mixed_batch_applies_the_valid_item_and_leaves_the_stale_one_alone() {
     assert_eq!(stats.leased_count, 1);
     assert_eq!(stats.ready_count, 0);
 }
+
+#[test]
+fn settling_a_message_that_does_not_exist_reports_message_not_found() {
+    let provider = provider_with_queue("orders");
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: "no-such-message".to_string(),
+                lease_token: "no-such-token".to_string(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    assert_eq!(response.results[0].code, code::NOT_FOUND);
+    assert_eq!(response.results[0].error_reason, reason::MESSAGE_NOT_FOUND);
+}
