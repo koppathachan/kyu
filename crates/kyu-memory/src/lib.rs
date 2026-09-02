@@ -22,11 +22,11 @@ impl MemoryProvider {
     pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
         let mut queues = self.queues.lock().expect("queues mutex");
         let created = !queues.contains_key(&req.config.queue_id);
-        if created {
-            queues.insert(req.config.queue_id.clone(), req.config.clone());
-        }
+        let stored = queues
+            .entry(req.config.queue_id.clone())
+            .or_insert(req.config);
         Ok(EnsureQueueResponse {
-            config: req.config,
+            config: stored.clone(),
             created,
         })
     }

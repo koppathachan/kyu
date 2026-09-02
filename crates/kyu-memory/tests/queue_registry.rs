@@ -47,3 +47,22 @@ fn ensuring_an_existing_queue_reports_it_was_not_created() {
 
     assert!(!response.created);
 }
+
+#[test]
+fn ensuring_an_existing_queue_returns_the_stored_config() {
+    let provider = MemoryProvider::new();
+    let stored = config("orders");
+    provider
+        .ensure_queue(EnsureQueueRequest {
+            config: stored.clone(),
+        })
+        .expect("first ensure_queue");
+
+    let mut different = config("orders");
+    different.max_deliveries = 99;
+    let response = provider
+        .ensure_queue(EnsureQueueRequest { config: different })
+        .expect("second ensure_queue");
+
+    assert_eq!(response.config, stored);
+}
