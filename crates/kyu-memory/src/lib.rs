@@ -40,6 +40,8 @@ struct Message {
     leased_until: Option<SystemTime>,
     /// The token issued by the current delivery (§3.3.1).
     lease_token: Option<String>,
+    /// `DEAD_LETTER` state (§3.6). Never delivered, counted separately.
+    dead_lettered: bool,
 }
 
 /// The original save behind an idempotency key. The window runs from
@@ -58,7 +60,7 @@ impl Message {
 
     /// Whether the message may be delivered at `now` (§3.2).
     fn is_eligible_at(&self, now: SystemTime) -> bool {
-        self.visible_at <= now && !self.is_leased_at(now)
+        !self.dead_lettered && self.visible_at <= now && !self.is_leased_at(now)
     }
 }
 
@@ -145,12 +147,15 @@ impl MemoryProvider {
         let now = SystemTime::now();
         let mut ready_count = 0;
         let mut leased_count = 0;
+        let mut dead_letter_count = 0;
         for message in self
             .messages()
             .iter()
             .filter(|message| message.queue_id == req.queue_id)
         {
-            if message.is_leased_at(now) {
+            if message.dead_lettered {
+                dead_letter_count += 1;
+            } else if message.is_leased_at(now) {
                 leased_count += 1;
             } else {
                 ready_count += 1;
@@ -159,7 +164,7 @@ impl MemoryProvider {
         Ok(GetQueueStatsResponse {
             ready_count,
             leased_count,
-            dead_letter_count: 0,
+            dead_letter_count,
         })
     }
 
@@ -206,6 +211,7 @@ impl MemoryProvider {
             visible_at: saved_at + req.visibility_delay.unwrap_or_default(),
             leased_until: None,
             lease_token: None,
+            dead_lettered: false,
         });
         Ok(SaveMessageResponse {
             message_id: id,
@@ -219,6 +225,16 @@ impl MemoryProvider {
         let lease_ttl = req.lease_ttl.unwrap_or(config.default_lease_ttl);
         let leased_at = SystemTime::now();
         let mut store = self.messages();
+        for message in store.iter_mut() {
+            if message.queue_id == req.queue_id
+                && message.is_eligible_at(leased_at)
+                && message.delivery_count >= config.max_deliveries
+            {
+                // §3.4: a message at the limit is dead-lettered rather than
+                // delivered again.
+                message.dead_lettered = true;
+            }
+        }
 
         let mut candidates: Vec<usize> = store
             .iter()
