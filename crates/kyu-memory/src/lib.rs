@@ -36,6 +36,13 @@ struct Message {
     leased_until: Option<SystemTime>,
 }
 
+impl Message {
+    /// Whether a lease on this message is still live at `now` (§3.3.6).
+    fn is_leased_at(&self, now: SystemTime) -> bool {
+        self.leased_until.is_some_and(|expires_at| expires_at > now)
+    }
+}
+
 impl MemoryProvider {
     pub fn new() -> Self {
         Self::default()
@@ -166,12 +173,7 @@ impl MemoryProvider {
         let messages = self
             .messages()
             .iter_mut()
-            .filter(|message| {
-                message.queue_id == req.queue_id
-                    && message
-                        .leased_until
-                        .is_none_or(|expires_at| expires_at <= leased_at)
-            })
+            .filter(|message| message.queue_id == req.queue_id && !message.is_leased_at(leased_at))
             .take(req.batch_size as usize)
             .map(|message| {
                 message.delivery_count += 1;
