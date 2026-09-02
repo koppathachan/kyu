@@ -391,20 +391,36 @@ impl MemoryProvider {
     ) -> Result<ReapExpiredLeasesResponse> {
         let now = SystemTime::now();
         let mut returned_to_ready = 0;
+        let mut moved_to_dead_letter = 0;
         for message in self.messages().iter_mut() {
+            if message.dead_lettered {
+                continue;
+            }
             let expired = message
                 .leased_until
                 .and_then(|expires_at| now.duration_since(expires_at).ok())
                 .is_some_and(|elapsed| elapsed >= req.grace_period);
-            if expired {
-                message.leased_until = None;
-                message.lease_token = None;
+            if !expired {
+                continue;
+            }
+
+            message.leased_until = None;
+            message.lease_token = None;
+            let max_deliveries = self
+                .queue_config(&message.queue_id)
+                .map(|config| config.max_deliveries)
+                .unwrap_or_default();
+            // §3.4: at the limit the message is dead-lettered, not made ready.
+            if message.delivery_count >= max_deliveries {
+                message.dead_lettered = true;
+                moved_to_dead_letter += 1;
+            } else {
                 returned_to_ready += 1;
             }
         }
         Ok(ReapExpiredLeasesResponse {
             returned_to_ready,
-            moved_to_dead_letter: 0,
+            moved_to_dead_letter,
         })
     }
 

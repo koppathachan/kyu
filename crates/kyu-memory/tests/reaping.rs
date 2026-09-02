@@ -83,3 +83,21 @@ fn reap_reports_how_many_leases_it_returned_to_ready() {
     assert_eq!(reaped.returned_to_ready, 3);
     assert_eq!(reaped.moved_to_dead_letter, 0);
 }
+
+#[test]
+fn reap_reports_how_many_messages_it_moved_to_dead_letter() {
+    // max_deliveries 1: one delivery already puts these at the limit.
+    let provider = provider_with_queue("orders", 1);
+    save_and_lease(&provider, "orders", 2, Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    let reaped = provider
+        .reap_expired_leases(ReapExpiredLeasesRequest {
+            grace_period: Duration::ZERO,
+        })
+        .expect("reap_expired_leases");
+
+    assert_eq!(reaped.moved_to_dead_letter, 2);
+    assert_eq!(reaped.returned_to_ready, 0);
+    assert_eq!(stats(&provider, "orders").dead_letter_count, 2);
+}
