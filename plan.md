@@ -139,7 +139,7 @@ The test list. This file is the work queue.
 
 <!-- §4 — Limits and validation (normative MUST; enforced on the SPI surface) -->
 
-- [ ] an empty or oversized `queue_id` fails `VALIDATION_FAILED`
+- [x] an empty or oversized `queue_id` fails `VALIDATION_FAILED`
 - [ ] `max_deliveries` below 1 fails `VALIDATION_FAILED`
 - [ ] saving an empty payload is accepted
 - [ ] a payload over 1 MiB fails `VALIDATION_FAILED`

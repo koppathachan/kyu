@@ -16,6 +16,13 @@ use kyu_conformance::spi::{
     reason,
 };
 
+/// §4 limits. The defaults from the specification's table; documented here
+/// because §4 requires an implementation to state the limits it enforces.
+mod limits {
+    /// `queue_id`: 256 bytes, non-empty.
+    pub const QUEUE_ID_BYTES: usize = 256;
+}
+
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
 #[derive(Debug, Default)]
 pub struct MemoryProvider {
@@ -97,6 +104,11 @@ impl MemoryProvider {
     }
 
     pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
+        let queue_id = &req.config.queue_id;
+        if queue_id.is_empty() || queue_id.len() > limits::QUEUE_ID_BYTES {
+            return Err(Error::validation_failed());
+        }
+
         let mut queues = self.queues();
         let created = !queues.contains_key(&req.config.queue_id);
         let stored = queues
