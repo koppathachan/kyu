@@ -9,7 +9,8 @@ use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, LeaseMessagesRequest,
     LeaseMessagesResponse, LeasedMessage, ListQueuesRequest, ListQueuesResponse, Result,
-    SaveMessageRequest, SaveMessageResponse, StorageQueueConfig,
+    SaveMessageRequest, SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse,
+    SettlementResult, StorageQueueConfig, code,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -161,6 +162,19 @@ impl MemoryProvider {
             })
             .collect();
         Ok(LeaseMessagesResponse { messages })
+    }
+
+    pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
+        let results = req
+            .settlements
+            .into_iter()
+            .map(|settlement| SettlementResult {
+                message_id: settlement.message_id,
+                code: code::OK,
+                error_reason: String::new(),
+            })
+            .collect();
+        Ok(SettleMessagesResponse { results })
     }
 
     pub fn get_provider_info(

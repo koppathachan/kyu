@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+    EnsureQueueRequest, LeaseMessagesRequest, Outcome, SaveMessageRequest, SettleMessagesRequest,
+    StorageQueueConfig, StorageSettlement, code,
 };
 use kyu_memory::MemoryProvider;
 
@@ -288,4 +289,38 @@ fn leasing_returns_no_more_messages_than_the_batch_size() {
         .expect("lease_messages");
 
     assert_eq!(response.messages.len(), 2);
+}
+
+#[test]
+fn acking_a_leased_message_reports_ok() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+    let message = &leased.messages[0];
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: message.message_id.clone(),
+                lease_token: message.lease_token.clone(),
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+
+    assert_eq!(response.results[0].code, code::OK);
 }
