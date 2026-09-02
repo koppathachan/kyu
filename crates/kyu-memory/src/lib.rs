@@ -1,7 +1,7 @@
 //! In-memory Kyu v1 storage provider.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
@@ -20,8 +20,12 @@ impl MemoryProvider {
         Self::default()
     }
 
+    fn queues(&self) -> MutexGuard<'_, HashMap<String, StorageQueueConfig>> {
+        self.queues.lock().expect("queues mutex")
+    }
+
     pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
-        let mut queues = self.queues.lock().expect("queues mutex");
+        let mut queues = self.queues();
         let created = !queues.contains_key(&req.config.queue_id);
         let stored = queues
             .entry(req.config.queue_id.clone())
@@ -33,7 +37,7 @@ impl MemoryProvider {
     }
 
     pub fn get_queue_config(&self, req: GetQueueConfigRequest) -> Result<GetQueueConfigResponse> {
-        let queues = self.queues.lock().expect("queues mutex");
+        let queues = self.queues();
         let config = queues
             .get(&req.queue_id)
             .cloned()
@@ -42,7 +46,7 @@ impl MemoryProvider {
     }
 
     pub fn list_queues(&self, _req: ListQueuesRequest) -> Result<ListQueuesResponse> {
-        let queues = self.queues.lock().expect("queues mutex");
+        let queues = self.queues();
         Ok(ListQueuesResponse {
             queues: queues.values().cloned().collect(),
             next_page_token: String::new(),
