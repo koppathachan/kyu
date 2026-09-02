@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/kyu-conformance", "crates/kyu-memory"]
+members = ["crates/kyu-conformance", "crates/kyu-memory", "crates/kyu-proto"]
 
 [workspace.package]
 edition = "2024"
