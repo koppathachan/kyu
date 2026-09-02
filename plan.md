@@ -85,61 +85,48 @@ The test list. This file is the work queue.
 
 <!-- §8.1.10 — Visibility delay -->
 
-- [ ] a message saved with a visibility delay is not leasable before the delay elapses
-- [ ] a message saved with a visibility delay is leasable once the delay elapses
+- [ ] a message saved with a visibility delay is not leasable before the delay elapses, then is
 
 <!-- §8.1.7 — Priority and ordering (§3.2) -->
 
 - [ ] message ids are lexicographically ordered by creation time
 - [ ] among visible messages the highest priority is delivered first
-- [ ] among equal priorities the message that became visible earliest is delivered first
-- [ ] among equal priorities and equal visibility times the lowest message id is delivered first
+- [ ] ties are broken by earliest `visible_at`, then by lowest message id
 
 <!-- §8.1.3 — Lease expiry -->
 
 - [ ] a message whose lease has expired is leasable again
-- [ ] redelivery after lease expiry reports `delivery_count` 2
-- [ ] redelivery after lease expiry issues a different lease token
+- [ ] redelivery after expiry reports `delivery_count` 2 and a different lease token
 
 <!-- §8.1.4 — Stale token -->
 
-- [ ] renewing with the current token extends the lease to now plus the extension
-- [ ] renewing does not rotate the lease token
-- [ ] renewing with a token from a previous delivery fails `LEASE_LOST`
-- [ ] renewing a lease that has already expired fails `LEASE_LOST`
-- [ ] a renew rejected as `LEASE_LOST` leaves the message unchanged
-- [ ] settling with a token from a previous delivery reports `LEASE_LOST`
-- [ ] a settlement rejected as `LEASE_LOST` leaves the message unchanged
+- [ ] renewing with the current token extends the lease to now plus the extension, token unchanged
+- [ ] renewing with a rotated or expired token fails `LEASE_LOST` and changes nothing
+- [ ] settling with a rotated token reports `LEASE_LOST` and changes nothing
 
 <!-- §8.1.5 — Retry delay -->
 
-- [ ] nacking with a retry delay makes the message unleasable for that duration
-- [ ] nacking with a retry delay makes the message leasable once the delay elapses
+- [ ] nacking with a retry delay makes the message unleasable for that duration, then leasable
 - [ ] nacking with a zero retry delay makes the message leasable immediately
 
 <!-- §8.1.6 — Dead-lettering -->
 
-- [ ] a message reaching `max_deliveries` by lease expiry moves to `DEAD_LETTER`
-- [ ] a message reaching `max_deliveries` by nack moves to `DEAD_LETTER`
+- [ ] a message reaching `max_deliveries` by lease expiry moves to `DEAD_LETTER` and is counted there
 - [ ] a dead-lettered message is never delivered again
-- [ ] queue stats count a dead-lettered message in `dead_letter_count`
-- [ ] with `dead_letter_enabled` false a message reaching `max_deliveries` is deleted instead
+- [ ] a message reaching `max_deliveries` by nack moves to `DEAD_LETTER`
 - [ ] a forced dead-letter settlement moves a message below `max_deliveries` to `DEAD_LETTER`
-- [ ] with `dead_letter_enabled` false a forced dead-letter deletes the message
+- [ ] with `dead_letter_enabled` false a dead-lettered message is deleted instead
 
 <!-- §8.1.9 — Batch settle -->
 
 - [ ] settling returns one result per settlement, in request order
-- [ ] a batch mixing a valid and a stale settlement applies the valid one
-- [ ] a batch mixing a valid and a stale settlement leaves the stale item's message unchanged
+- [ ] a batch mixing a valid and a stale settlement applies the valid one and leaves the stale one alone
 - [ ] settling a message that does not exist reports `MESSAGE_NOT_FOUND`
-- [ ] a batch containing item-level failures still returns OK for the call itself
 
 <!-- §8.1.11 — Queue isolation -->
 
 - [ ] leasing from one queue never returns another queue's messages
-- [ ] deleting a queue reports how many messages it purged
-- [ ] deleting a queue removes its messages
+- [ ] deleting a queue removes its messages and reports how many it purged
 - [ ] deleting a queue leaves another queue's messages intact
 
 <!-- §8.1.12 — Reaping -->
@@ -151,23 +138,19 @@ The test list. This file is the work queue.
 
 <!-- §4 — Limits and validation (normative MUST; enforced on the SPI surface) -->
 
-- [ ] ensuring a queue with an empty queue id fails `VALIDATION_FAILED`
-- [ ] ensuring a queue with a queue id over 256 bytes fails `VALIDATION_FAILED`
-- [ ] ensuring a queue with `max_deliveries` below 1 fails `VALIDATION_FAILED`
+- [ ] an empty or oversized `queue_id` fails `VALIDATION_FAILED`
+- [ ] `max_deliveries` below 1 fails `VALIDATION_FAILED`
 - [ ] saving an empty payload is accepted
-- [ ] saving a payload over 1 MiB fails `VALIDATION_FAILED`
-- [ ] saving more than 16 attributes fails `VALIDATION_FAILED`
-- [ ] saving attributes over 4 KiB serialised fails `VALIDATION_FAILED`
-- [ ] saving an idempotency key over 256 bytes fails `VALIDATION_FAILED`
-- [ ] leasing with a batch size of zero returns at most one message
-- [ ] leasing with a batch size over 100 fails `VALIDATION_FAILED`
-- [ ] leasing with a lease ttl under 1 second fails `VALIDATION_FAILED`
-- [ ] leasing with a lease ttl over 12 hours fails `VALIDATION_FAILED`
-- [ ] renewing with an extension under 1 second fails `VALIDATION_FAILED`
-- [ ] renewing with an extension over 12 hours fails `VALIDATION_FAILED`
-- [ ] settling an empty list of settlements fails `VALIDATION_FAILED`
-- [ ] settling more than 1000 settlements fails `VALIDATION_FAILED`
-- [ ] nacking with a retry delay over 12 hours fails `VALIDATION_FAILED`
+- [ ] a payload over 1 MiB fails `VALIDATION_FAILED`
+- [ ] more than 16 attributes, or over 4 KiB serialised, fails `VALIDATION_FAILED`
+- [ ] an idempotency key over 256 bytes fails `VALIDATION_FAILED`
+- [ ] a batch size of zero leases at most one message
+- [ ] a batch size over 100 fails `VALIDATION_FAILED`
+- [ ] a lease ttl outside 1 second to 12 hours fails `VALIDATION_FAILED`
+- [ ] a renew extension outside 1 second to 12 hours fails `VALIDATION_FAILED`
+- [ ] an empty settlement list fails `VALIDATION_FAILED`
+- [ ] more than 1000 settlements fails `VALIDATION_FAILED`
+- [ ] a retry delay over 12 hours fails `VALIDATION_FAILED`
 
 <!-- §8.1.8 — Concurrency -->
 
