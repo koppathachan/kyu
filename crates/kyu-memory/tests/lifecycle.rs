@@ -211,3 +211,29 @@ fn a_leased_messages_lease_expires_at_now_plus_the_requested_ttl() {
     assert!(expires_at >= before + Duration::from_secs(600));
     assert!(expires_at <= after + Duration::from_secs(600));
 }
+
+#[test]
+fn leasing_without_a_ttl_uses_the_queues_default_lease_ttl() {
+    // provider_with_queue sets default_lease_ttl to 30s.
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let before = SystemTime::now();
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+    let after = SystemTime::now();
+
+    let expires_at = response.messages[0].lease_expires_at;
+    assert!(expires_at >= before + Duration::from_secs(30));
+    assert!(expires_at <= after + Duration::from_secs(30));
+}
