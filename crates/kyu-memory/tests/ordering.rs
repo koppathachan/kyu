@@ -73,3 +73,34 @@ fn the_highest_priority_visible_message_is_delivered_first() {
 
     assert_eq!(delivered, [high, low]);
 }
+
+#[test]
+fn equal_priorities_are_broken_by_visible_at_then_message_id() {
+    let provider = provider_with_queue("orders");
+    // Saved first, but delayed, so it becomes visible last.
+    let delayed = provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            visibility_delay: Some(Duration::from_millis(200)),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message")
+        .message_id;
+    let prompt = save(&provider, "orders", 0);
+
+    std::thread::sleep(Duration::from_millis(250));
+    let delivered = lease_ids(&provider, "orders", 2);
+
+    assert_eq!(delivered, [prompt, delayed], "earliest visible_at wins");
+}
+
+#[test]
+fn equal_priority_and_visibility_are_broken_by_message_id() {
+    let provider = provider_with_queue("orders");
+    let first = save(&provider, "orders", 5);
+    let second = save(&provider, "orders", 5);
+
+    let delivered = lease_ids(&provider, "orders", 2);
+
+    assert_eq!(delivered, [first, second]);
+}

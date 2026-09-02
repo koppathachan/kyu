@@ -1,6 +1,5 @@
 //! In-memory Kyu v1 storage provider.
 
-use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -229,8 +228,14 @@ impl MemoryProvider {
             })
             .map(|(index, _)| index)
             .collect();
-        // §3.2: priority DESC first.
-        candidates.sort_by_key(|&index| Reverse(store[index].priority));
+        // §3.2: priority DESC, visible_at ASC, message_id ASC.
+        candidates.sort_by(|&a, &b| {
+            let (a, b) = (&store[a], &store[b]);
+            b.priority
+                .cmp(&a.priority)
+                .then(a.visible_at.cmp(&b.visible_at))
+                .then(a.id.cmp(&b.id))
+        });
         candidates.truncate(req.batch_size as usize);
 
         let messages = candidates

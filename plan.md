@@ -91,7 +91,7 @@ The test list. This file is the work queue.
 
 - [x] message ids are lexicographically ordered by creation time
 - [x] among visible messages the highest priority is delivered first
-- [ ] ties are broken by earliest `visible_at`, then by lowest message id
+- [x] ties are broken by earliest `visible_at`, then by lowest message id
 
 <!-- §8.1.3 — Lease expiry -->
 
