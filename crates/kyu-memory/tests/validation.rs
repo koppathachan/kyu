@@ -184,3 +184,26 @@ fn a_batch_size_of_zero_leases_at_most_one_message() {
     // §4: batch_size 0 means 1, not "none".
     assert_eq!(leased.messages.len(), 1);
 }
+
+#[test]
+fn a_batch_size_over_one_hundred_fails_validation() {
+    let provider = provider_with_queue("orders");
+
+    let error = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 101,
+            lease_ttl: None,
+        })
+        .expect_err("over the 100 message limit");
+
+    assert_eq!(error, Error::validation_failed());
+    // 100 is the limit, not one past it.
+    provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 100,
+            lease_ttl: None,
+        })
+        .expect("100 is legal");
+}

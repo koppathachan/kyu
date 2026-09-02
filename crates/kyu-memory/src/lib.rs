@@ -30,6 +30,8 @@ mod limits {
     pub const ATTRIBUTE_BYTES: usize = 4 * 1024;
     /// `idempotency_key`: 256 bytes. Empty means no deduplication.
     pub const IDEMPOTENCY_KEY_BYTES: usize = 256;
+    /// `batch_size`: 100 messages per lease. Zero means one.
+    pub const BATCH_SIZE: i32 = 100;
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -262,6 +264,9 @@ impl MemoryProvider {
     }
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
+        if req.batch_size > limits::BATCH_SIZE {
+            return Err(Error::validation_failed());
+        }
         let config = self.queue_config(&req.queue_id)?;
         let lease_ttl = req.lease_ttl.unwrap_or(config.default_lease_ttl);
         let leased_at = SystemTime::now();
