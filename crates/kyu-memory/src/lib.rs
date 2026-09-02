@@ -26,6 +26,7 @@ struct Message {
     id: String,
     queue_id: String,
     payload: Vec<u8>,
+    attributes: HashMap<String, String>,
 }
 
 impl MemoryProvider {
@@ -108,6 +109,7 @@ impl MemoryProvider {
             id: id.clone(),
             queue_id: req.queue_id,
             payload: req.payload,
+            attributes: req.attributes,
         });
         Ok(SaveMessageResponse {
             message_id: id,
@@ -130,7 +132,7 @@ impl MemoryProvider {
                 delivery_count: 0,
                 lease_token: String::new(),
                 lease_expires_at: SystemTime::now(),
-                attributes: HashMap::new(),
+                attributes: message.attributes.clone(),
             })
             .collect();
         Ok(LeaseMessagesResponse { messages })

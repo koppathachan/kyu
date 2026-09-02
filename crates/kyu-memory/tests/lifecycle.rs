@@ -1,5 +1,6 @@
 //! Protocol specification §8.1 requirement 1 — save → lease → ack.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use kyu_conformance::spi::{
@@ -76,4 +77,27 @@ fn leasing_returns_a_saved_message_with_its_payload() {
 
     assert_eq!(response.messages.len(), 1);
     assert_eq!(response.messages[0].payload, b"hello");
+}
+
+#[test]
+fn a_leased_message_carries_the_attributes_it_was_saved_with() {
+    let provider = provider_with_queue("orders");
+    let attributes = HashMap::from([("trace".to_string(), "abc123".to_string())]);
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            attributes: attributes.clone(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert_eq!(response.messages[0].attributes, attributes);
 }
