@@ -1,0 +1,16 @@
+[package]
+name = "kyu-memory"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "In-memory Kyu v1 storage provider."
+
+[features]
+# Off by default so `cargo test` runs only your own tests. Turn it on to run the
+# conformance suite: `cargo test -p kyu-memory --features conformance`.
+conformance = []
+
+[dependencies]
+
+[dev-dependencies]
+kyu-conformance = { path = "../kyu-conformance" }

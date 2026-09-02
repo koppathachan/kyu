@@ -1,0 +1,8 @@
+[package]
+name = "kyu-conformance"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Executable form of Kyu v1 protocol specification §8.1 (provider conformance requirements)."
+
+[dependencies]
