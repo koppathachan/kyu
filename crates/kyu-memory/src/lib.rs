@@ -25,6 +25,15 @@ impl MemoryProvider {
         self.queues.lock().expect("queues mutex")
     }
 
+    /// Fails `QUEUE_NOT_FOUND` (§7) unless the queue has been ensured.
+    fn require_queue(&self, queue_id: &str) -> Result<()> {
+        if self.queues().contains_key(queue_id) {
+            Ok(())
+        } else {
+            Err(Error::queue_not_found())
+        }
+    }
+
     pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
         let mut queues = self.queues();
         let created = !queues.contains_key(&req.config.queue_id);
@@ -74,17 +83,13 @@ impl MemoryProvider {
     }
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
-        if !self.queues().contains_key(&req.queue_id) {
-            return Err(Error::queue_not_found());
-        }
+        self.require_queue(&req.queue_id)?;
         // No test demands the success path yet.
         todo!("save into a known queue")
     }
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
-        if !self.queues().contains_key(&req.queue_id) {
-            return Err(Error::queue_not_found());
-        }
+        self.require_queue(&req.queue_id)?;
         // No test demands leasing from a known queue yet.
         todo!("lease from a known queue")
     }
