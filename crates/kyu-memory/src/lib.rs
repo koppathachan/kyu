@@ -47,18 +47,28 @@ impl MemoryProvider {
 
     pub fn list_queues(&self, req: ListQueuesRequest) -> Result<ListQueuesResponse> {
         let queues = self.queues();
-        let page: Vec<StorageQueueConfig> = queues
+        let mut page: Vec<StorageQueueConfig> = queues
             .values()
-            .take(if req.page_size > 0 {
-                req.page_size as usize
-            } else {
-                usize::MAX
-            })
+            .filter(|config| config.queue_id > req.page_token)
             .cloned()
             .collect();
+        page.sort_by(|a, b| a.queue_id.cmp(&b.queue_id));
+
+        let limit = if req.page_size > 0 {
+            req.page_size as usize
+        } else {
+            usize::MAX
+        };
+        let exhausted = page.len() <= limit;
+        page.truncate(limit);
+
+        let next_page_token = match page.last() {
+            Some(last) if !exhausted => last.queue_id.clone(),
+            _ => String::new(),
+        };
         Ok(ListQueuesResponse {
             queues: page,
-            next_page_token: String::new(),
+            next_page_token,
         })
     }
 

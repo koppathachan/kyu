@@ -141,3 +141,37 @@ fn listing_queues_returns_no_more_than_the_page_size() {
 
     assert_eq!(response.queues.len(), 2);
 }
+
+#[test]
+fn listing_queues_continues_from_the_previous_pages_token() {
+    let provider = MemoryProvider::new();
+    for queue_id in ["orders", "payments", "shipments"] {
+        provider
+            .ensure_queue(EnsureQueueRequest {
+                config: config(queue_id),
+            })
+            .expect("ensure_queue");
+    }
+
+    let first = provider
+        .list_queues(ListQueuesRequest {
+            page_size: 2,
+            page_token: String::new(),
+        })
+        .expect("first page");
+    let second = provider
+        .list_queues(ListQueuesRequest {
+            page_size: 2,
+            page_token: first.next_page_token.clone(),
+        })
+        .expect("second page");
+
+    let mut seen: Vec<String> = first
+        .queues
+        .into_iter()
+        .chain(second.queues)
+        .map(|c| c.queue_id)
+        .collect();
+    seen.sort();
+    assert_eq!(seen, ["orders", "payments", "shipments"]);
+}
