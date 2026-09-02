@@ -54,3 +54,26 @@ fn leasing_from_an_empty_queue_returns_no_messages() {
 
     assert!(response.messages.is_empty());
 }
+
+#[test]
+fn leasing_returns_a_saved_message_with_its_payload() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            payload: b"hello".to_vec(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert_eq!(response.messages.len(), 1);
+    assert_eq!(response.messages[0].payload, b"hello");
+}

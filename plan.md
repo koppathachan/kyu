@@ -57,7 +57,7 @@ The test list. This file is the work queue.
 
 - [x] saving a message to a queue returns a message id
 - [x] leasing from a queue with no messages returns no messages
-- [ ] leasing returns a saved message with its payload
+- [x] leasing returns a saved message with its payload
 - [ ] a leased message carries the attributes it was saved with
 - [ ] a leased message carries the priority it was saved with
 - [ ] a leased message carries the queue id it was saved to

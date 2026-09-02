@@ -8,20 +8,33 @@ use std::time::SystemTime;
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, LeaseMessagesRequest,
-    LeaseMessagesResponse, ListQueuesRequest, ListQueuesResponse, Result, SaveMessageRequest,
-    SaveMessageResponse, StorageQueueConfig,
+    LeaseMessagesResponse, LeasedMessage, ListQueuesRequest, ListQueuesResponse, Result,
+    SaveMessageRequest, SaveMessageResponse, StorageQueueConfig,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
 #[derive(Debug, Default)]
 pub struct MemoryProvider {
     queues: Mutex<HashMap<String, StorageQueueConfig>>,
+    messages: Mutex<Vec<Message>>,
     next_message_id: AtomicU64,
+}
+
+/// A message as the provider holds it.
+#[derive(Debug, Clone)]
+struct Message {
+    id: String,
+    queue_id: String,
+    payload: Vec<u8>,
 }
 
 impl MemoryProvider {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn messages(&self) -> MutexGuard<'_, Vec<Message>> {
+        self.messages.lock().expect("messages mutex")
     }
 
     fn queues(&self) -> MutexGuard<'_, HashMap<String, StorageQueueConfig>> {
@@ -87,11 +100,17 @@ impl MemoryProvider {
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
         self.require_queue(&req.queue_id)?;
+        let id = self
+            .next_message_id
+            .fetch_add(1, Ordering::Relaxed)
+            .to_string();
+        self.messages().push(Message {
+            id: id.clone(),
+            queue_id: req.queue_id,
+            payload: req.payload,
+        });
         Ok(SaveMessageResponse {
-            message_id: self
-                .next_message_id
-                .fetch_add(1, Ordering::Relaxed)
-                .to_string(),
+            message_id: id,
             saved_at: SystemTime::now(),
             deduplicated: false,
         })
@@ -99,7 +118,22 @@ impl MemoryProvider {
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         self.require_queue(&req.queue_id)?;
-        Ok(LeaseMessagesResponse::default())
+        let messages = self
+            .messages()
+            .iter()
+            .filter(|message| message.queue_id == req.queue_id)
+            .map(|message| LeasedMessage {
+                message_id: message.id.clone(),
+                queue_id: message.queue_id.clone(),
+                payload: message.payload.clone(),
+                priority: 0,
+                delivery_count: 0,
+                lease_token: String::new(),
+                lease_expires_at: SystemTime::now(),
+                attributes: HashMap::new(),
+            })
+            .collect();
+        Ok(LeaseMessagesResponse { messages })
     }
 
     pub fn get_provider_info(
