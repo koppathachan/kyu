@@ -123,3 +123,14 @@ fn a_duplicate_save_still_returns_the_original_id_after_the_message_was_acked() 
     assert_eq!(duplicate, original);
     assert!(deduplicated);
 }
+
+#[test]
+fn an_empty_idempotency_key_never_deduplicates() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    let (first, _) = save_with_key(&provider, "orders", "");
+
+    let (second, deduplicated) = save_with_key(&provider, "orders", "");
+
+    assert_ne!(second, first);
+    assert!(!deduplicated);
+}
