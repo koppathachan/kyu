@@ -61,7 +61,7 @@ The test list. This file is the work queue.
 - [x] a leased message carries the attributes it was saved with
 - [x] a leased message carries the priority it was saved with
 - [x] a leased message carries the queue id it was saved to
-- [ ] a leased message reports `delivery_count` 1 on its first delivery
+- [x] a leased message reports `delivery_count` 1 on its first delivery
 - [ ] a leased message carries a non-empty lease token
 - [ ] a leased message's lease expires at now plus the requested lease ttl
 - [ ] leasing without a lease ttl uses the queue's `default_lease_ttl`

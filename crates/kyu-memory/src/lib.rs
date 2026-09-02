@@ -28,6 +28,7 @@ struct Message {
     payload: Vec<u8>,
     priority: i32,
     attributes: HashMap<String, String>,
+    delivery_count: i32,
 }
 
 impl MemoryProvider {
@@ -112,6 +113,7 @@ impl MemoryProvider {
             payload: req.payload,
             priority: req.priority,
             attributes: req.attributes,
+            delivery_count: 0,
         });
         Ok(SaveMessageResponse {
             message_id: id,
@@ -124,17 +126,20 @@ impl MemoryProvider {
         self.require_queue(&req.queue_id)?;
         let messages = self
             .messages()
-            .iter()
+            .iter_mut()
             .filter(|message| message.queue_id == req.queue_id)
-            .map(|message| LeasedMessage {
-                message_id: message.id.clone(),
-                queue_id: message.queue_id.clone(),
-                payload: message.payload.clone(),
-                priority: message.priority,
-                delivery_count: 0,
-                lease_token: String::new(),
-                lease_expires_at: SystemTime::now(),
-                attributes: message.attributes.clone(),
+            .map(|message| {
+                message.delivery_count += 1;
+                LeasedMessage {
+                    message_id: message.id.clone(),
+                    queue_id: message.queue_id.clone(),
+                    payload: message.payload.clone(),
+                    priority: message.priority,
+                    delivery_count: message.delivery_count,
+                    lease_token: String::new(),
+                    lease_expires_at: SystemTime::now(),
+                    attributes: message.attributes.clone(),
+                }
             })
             .collect();
         Ok(LeaseMessagesResponse { messages })
