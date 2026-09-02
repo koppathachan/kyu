@@ -24,3 +24,8 @@ fn a_system_time_round_trips_through_a_proto_timestamp() {
 
     assert_eq!(restored, Some(instant));
 }
+
+#[test]
+fn an_absent_proto_duration_converts_to_none() {
+    assert_eq!(duration_from_proto(None), None);
+}
