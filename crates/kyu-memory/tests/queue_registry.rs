@@ -120,3 +120,24 @@ fn listing_queues_returns_the_queues_that_were_ensured() {
     listed.sort();
     assert_eq!(listed, ["orders", "payments"]);
 }
+
+#[test]
+fn listing_queues_returns_no_more_than_the_page_size() {
+    let provider = MemoryProvider::new();
+    for queue_id in ["orders", "payments", "shipments"] {
+        provider
+            .ensure_queue(EnsureQueueRequest {
+                config: config(queue_id),
+            })
+            .expect("ensure_queue");
+    }
+
+    let response = provider
+        .list_queues(ListQueuesRequest {
+            page_size: 2,
+            page_token: String::new(),
+        })
+        .expect("list_queues");
+
+    assert_eq!(response.queues.len(), 2);
+}

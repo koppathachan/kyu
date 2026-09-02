@@ -45,10 +45,19 @@ impl MemoryProvider {
         Ok(GetQueueConfigResponse { config })
     }
 
-    pub fn list_queues(&self, _req: ListQueuesRequest) -> Result<ListQueuesResponse> {
+    pub fn list_queues(&self, req: ListQueuesRequest) -> Result<ListQueuesResponse> {
         let queues = self.queues();
+        let page: Vec<StorageQueueConfig> = queues
+            .values()
+            .take(if req.page_size > 0 {
+                req.page_size as usize
+            } else {
+                usize::MAX
+            })
+            .cloned()
+            .collect();
         Ok(ListQueuesResponse {
-            queues: queues.values().cloned().collect(),
+            queues: page,
             next_page_token: String::new(),
         })
     }
