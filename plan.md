@@ -134,7 +134,8 @@ The test list. This file is the work queue.
 - [x] an expired lease is counted as ready again without any call to `reap_expired_leases`
 - [x] `reap_expired_leases` reports how many leases it returned to ready
 - [x] `reap_expired_leases` reports how many messages it moved to dead letter
-- [ ] `reap_expired_leases` with a grace period leaves more recently expired leases alone
+- [x] `reap_expired_leases` with a grace period leaves more recently expired leases alone
+- [ ] `reap_expired_leases` deletes rather than dead-letters when `dead_letter_enabled` is false
 
 <!-- §4 — Limits and validation (normative MUST; enforced on the SPI surface) -->
 

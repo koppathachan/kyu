@@ -101,3 +101,20 @@ fn reap_reports_how_many_messages_it_moved_to_dead_letter() {
     assert_eq!(reaped.returned_to_ready, 0);
     assert_eq!(stats(&provider, "orders").dead_letter_count, 2);
 }
+
+#[test]
+fn reap_with_a_grace_period_leaves_recently_expired_leases_alone() {
+    let provider = provider_with_queue("orders", 5);
+    save_and_lease(&provider, "orders", 1, Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    // Expired ~100ms ago, well inside a 10s grace period.
+    let reaped = provider
+        .reap_expired_leases(ReapExpiredLeasesRequest {
+            grace_period: Duration::from_secs(10),
+        })
+        .expect("reap_expired_leases");
+
+    assert_eq!(reaped.returned_to_ready, 0);
+    assert_eq!(reaped.moved_to_dead_letter, 0);
+}
