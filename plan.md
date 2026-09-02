@@ -155,6 +155,6 @@ The test list. This file is the work queue.
 
 <!-- §8.1.8 — Concurrency -->
 
-- [ ] concurrent leasers never receive the same message while its lease is live
+- [x] concurrent leasers never receive the same message while its lease is live
 - [ ] every message saved is delivered at least once under concurrent leasers
 - [ ] the number of messages acked under concurrent leasers equals the number saved
