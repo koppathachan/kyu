@@ -150,10 +150,7 @@ impl MemoryProvider {
             .iter()
             .filter(|message| message.queue_id == req.queue_id)
         {
-            if message
-                .leased_until
-                .is_some_and(|expires_at| expires_at > now)
-            {
+            if message.is_leased_at(now) {
                 leased_count += 1;
             } else {
                 ready_count += 1;
