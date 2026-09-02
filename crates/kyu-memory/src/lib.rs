@@ -10,9 +10,10 @@ use kyu_conformance::spi::{
     EnsureQueueResponse, Error, GetProviderInfoRequest, GetProviderInfoResponse,
     GetQueueConfigRequest, GetQueueConfigResponse, GetQueueStatsRequest, GetQueueStatsResponse,
     LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage, ListQueuesRequest,
-    ListQueuesResponse, Outcome, RenewLeaseRequest, RenewLeaseResponse, Result, SaveMessageRequest,
-    SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse, SettlementResult,
-    StorageQueueConfig, code, reason,
+    ListQueuesResponse, Outcome, ReapExpiredLeasesRequest, ReapExpiredLeasesResponse,
+    RenewLeaseRequest, RenewLeaseResponse, Result, SaveMessageRequest, SaveMessageResponse,
+    SettleMessagesRequest, SettleMessagesResponse, SettlementResult, StorageQueueConfig, code,
+    reason,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -382,6 +383,29 @@ impl MemoryProvider {
             })
             .collect();
         Ok(SettleMessagesResponse { results })
+    }
+
+    pub fn reap_expired_leases(
+        &self,
+        req: ReapExpiredLeasesRequest,
+    ) -> Result<ReapExpiredLeasesResponse> {
+        let now = SystemTime::now();
+        let mut returned_to_ready = 0;
+        for message in self.messages().iter_mut() {
+            let expired = message
+                .leased_until
+                .and_then(|expires_at| now.duration_since(expires_at).ok())
+                .is_some_and(|elapsed| elapsed >= req.grace_period);
+            if expired {
+                message.leased_until = None;
+                message.lease_token = None;
+                returned_to_ready += 1;
+            }
+        }
+        Ok(ReapExpiredLeasesResponse {
+            returned_to_ready,
+            moved_to_dead_letter: 0,
+        })
     }
 
     pub fn get_provider_info(

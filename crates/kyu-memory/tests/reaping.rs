@@ -67,3 +67,19 @@ fn an_expired_lease_is_ready_again_without_any_call_to_reap() {
     assert_eq!(stats.ready_count, 1);
     assert_eq!(stats.leased_count, 0);
 }
+
+#[test]
+fn reap_reports_how_many_leases_it_returned_to_ready() {
+    let provider = provider_with_queue("orders", 5);
+    save_and_lease(&provider, "orders", 3, Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    let reaped = provider
+        .reap_expired_leases(ReapExpiredLeasesRequest {
+            grace_period: Duration::ZERO,
+        })
+        .expect("reap_expired_leases");
+
+    assert_eq!(reaped.returned_to_ready, 3);
+    assert_eq!(reaped.moved_to_dead_letter, 0);
+}
