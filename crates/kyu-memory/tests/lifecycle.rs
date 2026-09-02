@@ -123,3 +123,24 @@ fn a_leased_message_carries_the_priority_it_was_saved_with() {
 
     assert_eq!(response.messages[0].priority, 7);
 }
+
+#[test]
+fn a_leased_message_carries_the_queue_id_it_was_saved_to() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert_eq!(response.messages[0].queue_id, "orders");
+}
