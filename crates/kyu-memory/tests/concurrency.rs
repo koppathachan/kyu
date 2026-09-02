@@ -6,7 +6,8 @@ use std::thread;
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+    EnsureQueueRequest, GetQueueStatsRequest, LeaseMessagesRequest, Outcome, SaveMessageRequest,
+    SettleMessagesRequest, StorageQueueConfig, StorageSettlement, code,
 };
 use kyu_memory::MemoryProvider;
 
@@ -101,4 +102,73 @@ fn every_saved_message_is_delivered_at_least_once() {
     // A leaser stops only on an empty batch, and leases outlive the test, so
     // an undelivered message would mean one was lost, not merely late.
     assert_eq!(delivered.len(), MESSAGES);
+}
+
+/// Every leaser acks what it leases, and reports how many acks the provider
+/// accepted.
+fn drain_and_ack(provider: &MemoryProvider) -> usize {
+    let mut acked = 0;
+    loop {
+        let batch = provider
+            .lease_messages(LeaseMessagesRequest {
+                queue_id: "orders".to_string(),
+                batch_size: 10,
+                lease_ttl: None,
+            })
+            .expect("lease_messages")
+            .messages;
+        if batch.is_empty() {
+            return acked;
+        }
+        let settlements = batch
+            .into_iter()
+            .map(|message| StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: message.message_id,
+                lease_token: message.lease_token,
+                outcome: Outcome::AckDelete,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            })
+            .collect();
+        acked += provider
+            .settle_messages(SettleMessagesRequest { settlements })
+            .expect("settle_messages")
+            .results
+            .iter()
+            .filter(|result| result.code == code::OK)
+            .count();
+    }
+}
+
+#[test]
+fn the_number_acked_equals_the_number_saved() {
+    let provider = provider_with_saved_messages();
+
+    let leasers: Vec<_> = (0..LEASERS)
+        .map(|_| {
+            let provider = Arc::clone(&provider);
+            thread::spawn(move || drain_and_ack(&provider))
+        })
+        .collect();
+    let acked: usize = leasers
+        .into_iter()
+        .map(|leaser| leaser.join().expect("leaser thread"))
+        .sum();
+
+    assert_eq!(acked, MESSAGES);
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_stats");
+    assert_eq!(
+        (
+            stats.ready_count,
+            stats.leased_count,
+            stats.dead_letter_count
+        ),
+        (0, 0, 0),
+        "acking removes the message"
+    );
 }

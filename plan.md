@@ -157,4 +157,4 @@ The test list. This file is the work queue.
 
 - [x] concurrent leasers never receive the same message while its lease is live
 - [x] every message saved is delivered at least once under concurrent leasers
-- [ ] the number of messages acked under concurrent leasers equals the number saved
+- [x] the number of messages acked under concurrent leasers equals the number saved
