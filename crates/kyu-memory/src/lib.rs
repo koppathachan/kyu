@@ -5,8 +5,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
-    GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, ListQueuesRequest,
-    ListQueuesResponse, Result, SaveMessageRequest, SaveMessageResponse, StorageQueueConfig,
+    GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, LeaseMessagesRequest,
+    LeaseMessagesResponse, ListQueuesRequest, ListQueuesResponse, Result, SaveMessageRequest,
+    SaveMessageResponse, StorageQueueConfig,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -78,6 +79,14 @@ impl MemoryProvider {
         }
         // No test demands the success path yet.
         todo!("save into a known queue")
+    }
+
+    pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
+        if !self.queues().contains_key(&req.queue_id) {
+            return Err(Error::queue_not_found());
+        }
+        // No test demands leasing from a known queue yet.
+        todo!("lease from a known queue")
     }
 
     pub fn get_provider_info(

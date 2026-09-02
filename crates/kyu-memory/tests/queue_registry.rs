@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, GetQueueConfigRequest, ListQueuesRequest, SaveMessageRequest,
-    StorageQueueConfig,
+    EnsureQueueRequest, Error, GetQueueConfigRequest, LeaseMessagesRequest, ListQueuesRequest,
+    SaveMessageRequest, StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 
@@ -185,6 +185,21 @@ fn saving_to_an_unknown_queue_fails_queue_not_found() {
         .save_message(SaveMessageRequest {
             queue_id: "nonexistent".to_string(),
             ..SaveMessageRequest::default()
+        })
+        .expect_err("unknown queue");
+
+    assert_eq!(error, Error::queue_not_found());
+}
+
+#[test]
+fn leasing_from_an_unknown_queue_fails_queue_not_found() {
+    let provider = MemoryProvider::new();
+
+    let error = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "nonexistent".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
         })
         .expect_err("unknown queue");
 
