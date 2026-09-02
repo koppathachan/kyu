@@ -134,3 +134,27 @@ fn an_empty_idempotency_key_never_deduplicates() {
     assert_ne!(second, first);
     assert!(!deduplicated);
 }
+
+#[test]
+fn the_same_key_in_two_queues_produces_two_messages() {
+    let provider = provider_with_queue("orders", Duration::from_secs(300));
+    provider
+        .ensure_queue(EnsureQueueRequest {
+            config: StorageQueueConfig {
+                queue_id: "payments".to_string(),
+                default_lease_ttl: Duration::from_secs(30),
+                max_deliveries: 5,
+                retry_backoff_base: Duration::from_secs(1),
+                retry_backoff_max: Duration::from_secs(60),
+                dedup_window: Duration::from_secs(300),
+                dead_letter_enabled: true,
+            },
+        })
+        .expect("ensure_queue");
+    let (in_orders, _) = save_with_key(&provider, "orders", "key-1");
+
+    let (in_payments, deduplicated) = save_with_key(&provider, "payments", "key-1");
+
+    assert_ne!(in_payments, in_orders);
+    assert!(!deduplicated);
+}
