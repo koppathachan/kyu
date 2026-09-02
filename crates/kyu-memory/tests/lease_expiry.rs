@@ -51,3 +51,22 @@ fn a_message_whose_lease_expired_is_leasable_again() {
 
     assert_eq!(lease(&provider, "orders", Duration::from_secs(1)).len(), 1);
 }
+
+#[test]
+fn redelivery_after_expiry_increments_delivery_count_and_rotates_the_token() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let first = lease(&provider, "orders", Duration::from_secs(1)).remove(0);
+
+    std::thread::sleep(Duration::from_millis(1_100));
+    let second = lease(&provider, "orders", Duration::from_secs(1)).remove(0);
+
+    assert_eq!(second.message_id, first.message_id);
+    assert_eq!(second.delivery_count, 2);
+    assert_ne!(second.lease_token, first.lease_token);
+}

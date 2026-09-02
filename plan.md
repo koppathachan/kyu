@@ -96,7 +96,7 @@ The test list. This file is the work queue.
 <!-- §8.1.3 — Lease expiry -->
 
 - [x] a message whose lease has expired is leasable again
-- [ ] redelivery after expiry reports `delivery_count` 2 and a different lease token
+- [x] redelivery after expiry reports `delivery_count` 2 and a different lease token
 
 <!-- §8.1.4 — Stale token -->
 
