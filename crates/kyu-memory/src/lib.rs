@@ -38,6 +38,8 @@ struct Message {
     visible_at: SystemTime,
     /// `Some` while a lease is outstanding; the instant it expires (§3.3).
     leased_until: Option<SystemTime>,
+    /// The token issued by the current delivery (§3.3.1).
+    lease_token: Option<String>,
 }
 
 /// The original save behind an idempotency key. The window runs from
@@ -206,6 +208,7 @@ impl MemoryProvider {
             delivery_count: 0,
             visible_at: saved_at + req.visibility_delay.unwrap_or_default(),
             leased_until: None,
+            lease_token: None,
         });
         Ok(SaveMessageResponse {
             message_id: id,
@@ -241,19 +244,21 @@ impl MemoryProvider {
         let messages = candidates
             .into_iter()
             .map(|index| {
+                let token = self
+                    .next_lease_token
+                    .fetch_add(1, Ordering::Relaxed)
+                    .to_string();
                 let message = &mut store[index];
                 message.delivery_count += 1;
                 message.leased_until = Some(leased_at + lease_ttl);
+                message.lease_token = Some(token.clone());
                 LeasedMessage {
                     message_id: message.id.clone(),
                     queue_id: message.queue_id.clone(),
                     payload: message.payload.clone(),
                     priority: message.priority,
                     delivery_count: message.delivery_count,
-                    lease_token: self
-                        .next_lease_token
-                        .fetch_add(1, Ordering::Relaxed)
-                        .to_string(),
+                    lease_token: token,
                     lease_expires_at: leased_at + lease_ttl,
                     attributes: message.attributes.clone(),
                 }
@@ -269,9 +274,16 @@ impl MemoryProvider {
             .find(|message| message.queue_id == req.queue_id && message.id == req.message_id)
             .ok_or_else(Error::message_not_found)?;
 
+        // §3.3.2/§3.3.4: a stale, rotated or expired token fails LEASE_LOST and
+        // leaves the message untouched. Expiry is final.
+        let now = SystemTime::now();
+        if !message.is_leased_at(now) || message.lease_token.as_deref() != Some(&req.lease_token) {
+            return Err(Error::lease_lost());
+        }
+
         // §3.3.3: the new expiry is now + extension, not current expiry +
         // extension, and the token is not rotated.
-        let lease_expires_at = SystemTime::now() + req.extension;
+        let lease_expires_at = now + req.extension;
         message.leased_until = Some(lease_expires_at);
         Ok(RenewLeaseResponse { lease_expires_at })
     }

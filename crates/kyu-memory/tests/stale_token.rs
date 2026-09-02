@@ -3,8 +3,8 @@
 use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, LeaseMessagesRequest, LeasedMessage, RenewLeaseRequest, SaveMessageRequest,
-    StorageQueueConfig,
+    EnsureQueueRequest, Error, LeaseMessagesRequest, LeasedMessage, RenewLeaseRequest,
+    SaveMessageRequest, StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 
@@ -63,4 +63,53 @@ fn renewing_extends_the_lease_to_now_plus_the_extension() {
     // §3.3.3: now + extension, not current expiry + extension.
     assert!(renewed.lease_expires_at >= before + Duration::from_secs(600));
     assert!(renewed.lease_expires_at <= after + Duration::from_secs(600));
+}
+
+fn renew(
+    provider: &MemoryProvider,
+    leased: &LeasedMessage,
+    token: &str,
+) -> Result<Duration, Error> {
+    provider
+        .renew_lease(RenewLeaseRequest {
+            queue_id: "orders".to_string(),
+            message_id: leased.message_id.clone(),
+            lease_token: token.to_string(),
+            extension: Duration::from_secs(600),
+        })
+        .map(|_| Duration::ZERO)
+}
+
+#[test]
+fn renewing_with_a_rotated_token_fails_lease_lost_and_changes_nothing() {
+    let provider = provider_with_queue("orders");
+    let first = save_and_lease(&provider, "orders", Duration::from_secs(1));
+    std::thread::sleep(Duration::from_millis(1_100));
+    // Redelivery rotates the token; `first.lease_token` is now stale.
+    let second = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(30)),
+        })
+        .expect("redelivery")
+        .messages
+        .remove(0);
+
+    let error = renew(&provider, &first, &first.lease_token).expect_err("stale token");
+
+    assert_eq!(error, Error::lease_lost());
+    // Unchanged: the current token still renews (§3.3.3 does not rotate it).
+    renew(&provider, &second, &second.lease_token).expect("current token still renews");
+}
+
+#[test]
+fn renewing_an_expired_lease_fails_lease_lost() {
+    let provider = provider_with_queue("orders");
+    let leased = save_and_lease(&provider, "orders", Duration::from_secs(1));
+
+    std::thread::sleep(Duration::from_millis(1_100));
+
+    let error = renew(&provider, &leased, &leased.lease_token).expect_err("expired lease");
+    assert_eq!(error, Error::lease_lost());
 }
