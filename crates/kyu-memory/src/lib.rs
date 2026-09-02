@@ -208,22 +208,7 @@ impl MemoryProvider {
     }
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
-        if req.payload.len() > limits::PAYLOAD_BYTES {
-            return Err(Error::validation_failed());
-        }
-        let attributes_bytes: usize = req
-            .attributes
-            .iter()
-            .map(|(key, value)| key.len() + value.len())
-            .sum();
-        if req.attributes.len() > limits::ATTRIBUTE_ENTRIES
-            || attributes_bytes > limits::ATTRIBUTE_BYTES
-        {
-            return Err(Error::validation_failed());
-        }
-        if req.idempotency_key.len() > limits::IDEMPOTENCY_KEY_BYTES {
-            return Err(Error::validation_failed());
-        }
+        validate_save(&req)?;
 
         let config = self.queue_config(&req.queue_id)?;
         let dedup_key = (req.queue_id.clone(), req.idempotency_key.clone());
@@ -484,5 +469,24 @@ impl MemoryProvider {
             provider_version: env!("CARGO_PKG_VERSION").to_string(),
             contract_version: CONTRACT_VERSION.to_string(),
         })
+    }
+}
+
+/// §4 limits on a save. Checked before the queue is looked up, so an oversized
+/// request is rejected the same way whether or not the queue exists.
+fn validate_save(req: &SaveMessageRequest) -> Result<()> {
+    let attributes_bytes: usize = req
+        .attributes
+        .iter()
+        .map(|(key, value)| key.len() + value.len())
+        .sum();
+    let within_limits = req.payload.len() <= limits::PAYLOAD_BYTES
+        && req.attributes.len() <= limits::ATTRIBUTE_ENTRIES
+        && attributes_bytes <= limits::ATTRIBUTE_BYTES
+        && req.idempotency_key.len() <= limits::IDEMPOTENCY_KEY_BYTES;
+    if within_limits {
+        Ok(())
+    } else {
+        Err(Error::validation_failed())
     }
 }
