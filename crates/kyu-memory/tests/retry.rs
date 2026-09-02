@@ -70,3 +70,21 @@ fn a_nack_with_a_retry_delay_holds_the_message_back_until_it_elapses() {
     std::thread::sleep(Duration::from_millis(350));
     assert_eq!(lease(&provider, "orders").len(), 1, "after the delay");
 }
+
+#[test]
+fn a_nack_with_a_zero_retry_delay_makes_the_message_leasable_immediately() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let leased = lease(&provider, "orders").remove(0);
+
+    nack(&provider, &leased, Duration::ZERO);
+
+    let redelivered = lease(&provider, "orders");
+    assert_eq!(redelivered.len(), 1);
+    assert_eq!(redelivered[0].delivery_count, 2);
+}
