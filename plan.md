@@ -27,7 +27,7 @@ The test list. This file is the work queue.
 - [x] ensuring an existing queue returns the stored config, not the requested one
 - [x] getting a queue's config returns the config it was ensured with
 - [x] getting the config of an unknown queue fails `QUEUE_NOT_FOUND`
-- [ ] listing queues returns the queues that have been ensured
+- [x] listing queues returns the queues that have been ensured
 - [ ] listing queues returns no more queues than the requested page size
 - [ ] listing queues continues from the page token of the previous page
 - [ ] saving to an unknown queue fails `QUEUE_NOT_FOUND`

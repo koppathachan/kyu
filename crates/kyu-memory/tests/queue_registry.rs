@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, Error, GetQueueConfigRequest, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, Error, GetQueueConfigRequest, ListQueuesRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -97,4 +99,24 @@ fn getting_the_config_of_an_unknown_queue_fails_queue_not_found() {
         .expect_err("unknown queue");
 
     assert_eq!(error, Error::queue_not_found());
+}
+
+#[test]
+fn listing_queues_returns_the_queues_that_were_ensured() {
+    let provider = MemoryProvider::new();
+    for queue_id in ["orders", "payments"] {
+        provider
+            .ensure_queue(EnsureQueueRequest {
+                config: config(queue_id),
+            })
+            .expect("ensure_queue");
+    }
+
+    let response = provider
+        .list_queues(ListQueuesRequest::default())
+        .expect("list_queues");
+
+    let mut listed: Vec<String> = response.queues.into_iter().map(|c| c.queue_id).collect();
+    listed.sort();
+    assert_eq!(listed, ["orders", "payments"]);
 }
