@@ -1,7 +1,7 @@
 //! Protocol specification §8.1 requirement 1 — save → lease → ack.
 
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::{
     EnsureQueueRequest, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
@@ -185,4 +185,29 @@ fn a_leased_message_carries_a_non_empty_lease_token() {
         .expect("lease_messages");
 
     assert!(!response.messages[0].lease_token.is_empty());
+}
+
+#[test]
+fn a_leased_messages_lease_expires_at_now_plus_the_requested_ttl() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+
+    let before = SystemTime::now();
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(Duration::from_secs(600)),
+        })
+        .expect("lease_messages");
+    let after = SystemTime::now();
+
+    let expires_at = response.messages[0].lease_expires_at;
+    assert!(expires_at >= before + Duration::from_secs(600));
+    assert!(expires_at <= after + Duration::from_secs(600));
 }

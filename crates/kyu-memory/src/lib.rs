@@ -125,6 +125,9 @@ impl MemoryProvider {
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         self.require_queue(&req.queue_id)?;
+        // The queue default is the next test; until then an omitted ttl is zero.
+        let lease_ttl = req.lease_ttl.unwrap_or_default();
+        let leased_at = SystemTime::now();
         let next_lease_token = &self.next_lease_token;
         let messages = self
             .messages()
@@ -139,7 +142,7 @@ impl MemoryProvider {
                     priority: message.priority,
                     delivery_count: message.delivery_count,
                     lease_token: next_lease_token.fetch_add(1, Ordering::Relaxed).to_string(),
-                    lease_expires_at: SystemTime::now(),
+                    lease_expires_at: leased_at + lease_ttl,
                     attributes: message.attributes.clone(),
                 }
             })
