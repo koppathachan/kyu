@@ -16,6 +16,47 @@ The test list. This file is the work queue.
 
 ## Tests
 
+<!--
+  Proto adapter — generated `kyu.storage.v1` types <-> `spi::*`.
+  §1: the in-process and gRPC bindings are the same contract. These conversions
+  are what prove the hand-transcribed trait and the compiled proto agree.
+-->
+
+- [ ] a `Duration` converts to its proto form and back
+- [ ] a `SystemTime` converts to a proto `Timestamp` and back
+- [ ] an absent proto `Duration` converts to `None`
+- [ ] `MessageState` converts to its proto enum and back
+- [ ] `Outcome` converts to its proto enum and back
+- [ ] an unspecified proto `Outcome` converts to `Outcome::Unspecified`
+- [ ] an spi `Error` converts to a `tonic::Status` with the same code
+- [ ] an spi `Error` converts to a `tonic::Status` carrying the §7 reason
+- [ ] `StorageQueueConfig` round-trips through its proto form
+- [ ] `EnsureQueueRequest` round-trips through its proto form
+- [ ] `EnsureQueueResponse` round-trips through its proto form
+- [ ] `GetQueueConfigRequest` round-trips through its proto form
+- [ ] `GetQueueConfigResponse` round-trips through its proto form
+- [ ] `ListQueuesRequest` round-trips through its proto form
+- [ ] `ListQueuesResponse` round-trips through its proto form
+- [ ] `DeleteQueueRequest` round-trips through its proto form
+- [ ] `DeleteQueueResponse` round-trips through its proto form
+- [ ] `GetQueueStatsRequest` round-trips through its proto form
+- [ ] `GetQueueStatsResponse` round-trips through its proto form
+- [ ] `SaveMessageRequest` round-trips through its proto form
+- [ ] `SaveMessageResponse` round-trips through its proto form
+- [ ] `LeaseMessagesRequest` round-trips through its proto form
+- [ ] `LeasedMessage` round-trips through its proto form
+- [ ] `LeaseMessagesResponse` round-trips through its proto form
+- [ ] `RenewLeaseRequest` round-trips through its proto form
+- [ ] `RenewLeaseResponse` round-trips through its proto form
+- [ ] `StorageSettlement` round-trips through its proto form
+- [ ] `SettleMessagesRequest` round-trips through its proto form
+- [ ] `SettlementResult` round-trips through its proto form
+- [ ] `SettleMessagesResponse` round-trips through its proto form
+- [ ] `ReapExpiredLeasesRequest` round-trips through its proto form
+- [ ] `ReapExpiredLeasesResponse` round-trips through its proto form
+- [ ] `GetProviderInfoResponse` round-trips through its proto form
+
+
 <!-- §8.1.13 — Provider info -->
 
 - [x] `get_provider_info` reports `contract_version` "kyu.storage.v1"
