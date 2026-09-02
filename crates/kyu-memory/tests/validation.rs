@@ -207,3 +207,31 @@ fn a_batch_size_over_one_hundred_fails_validation() {
         })
         .expect("100 is legal");
 }
+
+#[test]
+fn a_lease_ttl_outside_one_second_to_twelve_hours_fails_validation() {
+    let provider = provider_with_queue("orders");
+
+    for lease_ttl in [
+        Duration::from_millis(999),
+        Duration::from_secs(12 * 60 * 60) + Duration::from_secs(1),
+    ] {
+        let error = lease_with_ttl(&provider, lease_ttl).expect_err("lease_ttl out of range");
+        assert_eq!(error, Error::validation_failed(), "{lease_ttl:?}");
+    }
+
+    // Both ends of the range are legal, not one past them.
+    for lease_ttl in [Duration::from_secs(1), Duration::from_secs(12 * 60 * 60)] {
+        lease_with_ttl(&provider, lease_ttl).expect("at the boundary");
+    }
+}
+
+fn lease_with_ttl(provider: &MemoryProvider, lease_ttl: Duration) -> Result<(), Error> {
+    provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: Some(lease_ttl),
+        })
+        .map(|_| ())
+}

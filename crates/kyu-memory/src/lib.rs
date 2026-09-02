@@ -19,6 +19,8 @@ use kyu_conformance::spi::{
 /// §4 limits. The defaults from the specification's table; documented here
 /// because §4 requires an implementation to state the limits it enforces.
 mod limits {
+    use std::time::Duration;
+
     /// `queue_id`: 256 bytes, non-empty.
     pub const QUEUE_ID_BYTES: usize = 256;
     /// `payload`: 1 MiB. An empty payload is legal.
@@ -32,6 +34,10 @@ mod limits {
     pub const IDEMPOTENCY_KEY_BYTES: usize = 256;
     /// `batch_size`: 100 messages per lease. Zero means one.
     pub const BATCH_SIZE: i32 = 100;
+    /// `lease_ttl`: at least 1 second. Omitted means the queue default.
+    pub const LEASE_TTL_MIN: Duration = Duration::from_secs(1);
+    /// `lease_ttl`: at most 12 hours.
+    pub const LEASE_TTL_MAX: Duration = Duration::from_secs(12 * 60 * 60);
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -265,6 +271,12 @@ impl MemoryProvider {
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         if req.batch_size > limits::BATCH_SIZE {
+            return Err(Error::validation_failed());
+        }
+        if req
+            .lease_ttl
+            .is_some_and(|ttl| ttl < limits::LEASE_TTL_MIN || ttl > limits::LEASE_TTL_MAX)
+        {
             return Err(Error::validation_failed());
         }
         let config = self.queue_config(&req.queue_id)?;
