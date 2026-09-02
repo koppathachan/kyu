@@ -82,3 +82,23 @@ fn concurrent_leasers_never_receive_the_same_message() {
         "a message was delivered twice while its lease was live"
     );
 }
+
+#[test]
+fn every_saved_message_is_delivered_at_least_once() {
+    let provider = provider_with_saved_messages();
+
+    let leasers: Vec<_> = (0..LEASERS)
+        .map(|_| {
+            let provider = Arc::clone(&provider);
+            thread::spawn(move || drain(&provider))
+        })
+        .collect();
+    let delivered: HashSet<String> = leasers
+        .into_iter()
+        .flat_map(|leaser| leaser.join().expect("leaser thread"))
+        .collect();
+
+    // A leaser stops only on an empty batch, and leases outlive the test, so
+    // an undelivered message would mean one was lost, not merely late.
+    assert_eq!(delivered.len(), MESSAGES);
+}
