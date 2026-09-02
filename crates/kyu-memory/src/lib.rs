@@ -1,7 +1,9 @@
 //! In-memory Kyu v1 storage provider.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
+use std::time::SystemTime;
 
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
@@ -14,6 +16,7 @@ use kyu_conformance::spi::{
 #[derive(Debug, Default)]
 pub struct MemoryProvider {
     queues: Mutex<HashMap<String, StorageQueueConfig>>,
+    next_message_id: AtomicU64,
 }
 
 impl MemoryProvider {
@@ -84,8 +87,14 @@ impl MemoryProvider {
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
         self.require_queue(&req.queue_id)?;
-        // No test demands the success path yet.
-        todo!("save into a known queue")
+        Ok(SaveMessageResponse {
+            message_id: self
+                .next_message_id
+                .fetch_add(1, Ordering::Relaxed)
+                .to_string(),
+            saved_at: SystemTime::now(),
+            deduplicated: false,
+        })
     }
 
     pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
