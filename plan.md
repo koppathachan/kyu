@@ -23,7 +23,7 @@ The test list. This file is the work queue.
 <!-- Queue registry — prerequisite for §8.1.1 and §8.1.11; error codes per §7 -->
 
 - [x] ensuring a queue that does not exist reports it was created
-- [ ] ensuring a queue that already exists reports it was not created
+- [x] ensuring a queue that already exists reports it was not created
 - [ ] ensuring an existing queue returns the stored config, not the requested one
 - [ ] getting a queue's config returns the config it was ensured with
 - [ ] getting the config of an unknown queue fails `QUEUE_NOT_FOUND`

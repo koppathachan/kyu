@@ -29,3 +29,21 @@ fn ensuring_a_new_queue_reports_it_was_created() {
 
     assert!(response.created);
 }
+
+#[test]
+fn ensuring_an_existing_queue_reports_it_was_not_created() {
+    let provider = MemoryProvider::new();
+    provider
+        .ensure_queue(EnsureQueueRequest {
+            config: config("orders"),
+        })
+        .expect("first ensure_queue");
+
+    let response = provider
+        .ensure_queue(EnsureQueueRequest {
+            config: config("orders"),
+        })
+        .expect("second ensure_queue");
+
+    assert!(!response.created);
+}
