@@ -77,3 +77,23 @@ fn deleting_a_queue_removes_its_messages_and_reports_the_purged_count() {
         })
         .expect_err("the queue is gone");
 }
+
+#[test]
+fn deleting_a_queue_leaves_another_queues_messages_intact() {
+    let provider = provider_with_queues(&["orders", "payments"]);
+    save(&provider, "orders", b"order");
+    save(&provider, "payments", b"payment");
+
+    provider
+        .delete_queue(DeleteQueueRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("delete_queue");
+
+    let stats = provider
+        .get_queue_stats(GetQueueStatsRequest {
+            queue_id: "payments".to_string(),
+        })
+        .expect("get_queue_stats");
+    assert_eq!(stats.ready_count, 1);
+}

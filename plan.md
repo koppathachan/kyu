@@ -127,7 +127,7 @@ The test list. This file is the work queue.
 
 - [x] leasing from one queue never returns another queue's messages
 - [x] deleting a queue removes its messages and reports how many it purged
-- [ ] deleting a queue leaves another queue's messages intact
+- [x] deleting a queue leaves another queue's messages intact
 
 <!-- §8.1.12 — Reaping -->
 
