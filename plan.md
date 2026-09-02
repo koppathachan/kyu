@@ -36,6 +36,10 @@ The test list. This file is the work queue.
   server never needs it.
 -->
 
+<!-- §8.1.13 — Provider info -->
+
+- [x] `get_provider_info` reports `contract_version` "kyu.storage.v1"
+
 <!-- Queue registry — prerequisite for §8.1.1 and §8.1.11; error codes per §7 -->
 
 - [x] ensuring a queue that does not exist reports it was created
