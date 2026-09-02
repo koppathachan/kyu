@@ -9,9 +9,9 @@ use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, Error, GetProviderInfoRequest,
     GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, GetQueueStatsRequest,
     GetQueueStatsResponse, LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage,
-    ListQueuesRequest, ListQueuesResponse, Outcome, Result, SaveMessageRequest,
-    SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse, SettlementResult,
-    StorageQueueConfig, code,
+    ListQueuesRequest, ListQueuesResponse, Outcome, RenewLeaseRequest, RenewLeaseResponse, Result,
+    SaveMessageRequest, SaveMessageResponse, SettleMessagesRequest, SettleMessagesResponse,
+    SettlementResult, StorageQueueConfig, code,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -260,6 +260,20 @@ impl MemoryProvider {
             })
             .collect();
         Ok(LeaseMessagesResponse { messages })
+    }
+
+    pub fn renew_lease(&self, req: RenewLeaseRequest) -> Result<RenewLeaseResponse> {
+        let mut store = self.messages();
+        let message = store
+            .iter_mut()
+            .find(|message| message.queue_id == req.queue_id && message.id == req.message_id)
+            .ok_or_else(Error::message_not_found)?;
+
+        // §3.3.3: the new expiry is now + extension, not current expiry +
+        // extension, and the token is not rotated.
+        let lease_expires_at = SystemTime::now() + req.extension;
+        message.leased_until = Some(lease_expires_at);
+        Ok(RenewLeaseResponse { lease_expires_at })
     }
 
     pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
