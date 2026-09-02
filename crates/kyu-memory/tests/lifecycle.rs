@@ -266,3 +266,26 @@ fn a_message_with_a_live_lease_is_not_returned_to_a_second_leaser() {
 
     assert!(second.messages.is_empty());
 }
+
+#[test]
+fn leasing_returns_no_more_messages_than_the_batch_size() {
+    let provider = provider_with_queue("orders");
+    for _ in 0..3 {
+        provider
+            .save_message(SaveMessageRequest {
+                queue_id: "orders".to_string(),
+                ..SaveMessageRequest::default()
+            })
+            .expect("save_message");
+    }
+
+    let response = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 2,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    assert_eq!(response.messages.len(), 2);
+}

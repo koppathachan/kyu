@@ -144,6 +144,7 @@ impl MemoryProvider {
                         .leased_until
                         .is_none_or(|expires_at| expires_at <= leased_at)
             })
+            .take(req.batch_size as usize)
             .map(|message| {
                 message.delivery_count += 1;
                 message.leased_until = Some(leased_at + lease_ttl);
