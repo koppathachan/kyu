@@ -67,3 +67,17 @@ fn a_message_reaching_max_deliveries_by_expiry_is_dead_lettered_and_counted() {
     assert_eq!(stats.dead_letter_count, 1);
     assert_eq!(stats.ready_count, 0);
 }
+
+#[test]
+fn a_dead_lettered_message_is_never_delivered_again() {
+    let provider = provider_with_queue("orders", 1, true);
+    save(&provider, "orders");
+    lease(&provider, "orders", Duration::from_secs(1));
+    std::thread::sleep(Duration::from_millis(1_100));
+    lease(&provider, "orders", Duration::from_secs(1)); // sweeps it to DEAD_LETTER
+
+    for _ in 0..3 {
+        assert_eq!(lease(&provider, "orders", Duration::from_secs(1)).len(), 0);
+    }
+    assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
+}
