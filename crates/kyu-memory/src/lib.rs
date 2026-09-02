@@ -34,10 +34,14 @@ mod limits {
     pub const IDEMPOTENCY_KEY_BYTES: usize = 256;
     /// `batch_size`: 100 messages per lease. Zero means one.
     pub const BATCH_SIZE: i32 = 100;
-    /// `lease_ttl`: at least 1 second. Omitted means the queue default.
-    pub const LEASE_TTL_MIN: Duration = Duration::from_secs(1);
-    /// `lease_ttl`: at most 12 hours.
+    /// `lease_ttl`: at most 12 hours. Omitted means the queue default.
+    ///
+    /// §4 makes the MUST an *upper* bound and lets an implementation differ
+    /// from the table's other values so long as it documents them: this
+    /// provider enforces **no lower bound**, so a sub-second lease is legal.
     pub const LEASE_TTL_MAX: Duration = Duration::from_secs(12 * 60 * 60);
+    /// `RenewLease.extension`: at least 1 second, at most [`LEASE_TTL_MAX`].
+    pub const EXTENSION_MIN: Duration = Duration::from_secs(1);
     /// `settlements`: 1000 items per batch, and never empty.
     pub const SETTLEMENTS: usize = 1000;
     /// `retry_delay`: at most 12 hours. Zero means retry immediately.
@@ -279,10 +283,7 @@ impl StorageProvider for MemoryProvider {
         if req.batch_size > limits::BATCH_SIZE {
             return Err(Error::validation_failed());
         }
-        if req
-            .lease_ttl
-            .is_some_and(|ttl| ttl < limits::LEASE_TTL_MIN || ttl > limits::LEASE_TTL_MAX)
-        {
+        if req.lease_ttl.is_some_and(|ttl| ttl > limits::LEASE_TTL_MAX) {
             return Err(Error::validation_failed());
         }
         let config = self.queue_config(&req.queue_id)?;
@@ -355,7 +356,7 @@ impl StorageProvider for MemoryProvider {
 
     fn renew_lease(&self, req: RenewLeaseRequest) -> Result<RenewLeaseResponse> {
         // §4: an extension is bounded the same way a lease_ttl is.
-        if req.extension < limits::LEASE_TTL_MIN || req.extension > limits::LEASE_TTL_MAX {
+        if req.extension < limits::EXTENSION_MIN || req.extension > limits::LEASE_TTL_MAX {
             return Err(Error::validation_failed());
         }
         let mut store = self.messages();

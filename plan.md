@@ -147,7 +147,14 @@ The test list. This file is the work queue.
 - [x] an idempotency key over 256 bytes fails `VALIDATION_FAILED`
 - [x] a batch size of zero leases at most one message
 - [x] a batch size over 100 fails `VALIDATION_FAILED`
-- [x] a lease ttl outside 1 second to 12 hours fails `VALIDATION_FAILED`
+- [x] a lease ttl over 12 hours fails `VALIDATION_FAILED`; a sub-second ttl is accepted
+<!--
+  This line first read "outside 1 second to 12 hours". §4's normative sentence
+  makes the MUST an *upper* bound and says the table's values are defaults an
+  implementation MAY differ from if it documents them, so the 1 second minimum
+  is not binding — and §8.1's expiry scenarios lease for 300 ms. The floor was
+  removed and documented in `limits`; the extension floor (below) still stands.
+-->
 - [x] a renew extension outside 1 second to 12 hours fails `VALIDATION_FAILED`
 - [x] an empty settlement list fails `VALIDATION_FAILED`
 - [x] more than 1000 settlements fails `VALIDATION_FAILED`
