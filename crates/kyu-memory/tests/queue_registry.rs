@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, StorageQueueConfig};
+use kyu_conformance::spi::{EnsureQueueRequest, GetQueueConfigRequest, StorageQueueConfig};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -63,6 +63,25 @@ fn ensuring_an_existing_queue_returns_the_stored_config() {
     let response = provider
         .ensure_queue(EnsureQueueRequest { config: different })
         .expect("second ensure_queue");
+
+    assert_eq!(response.config, stored);
+}
+
+#[test]
+fn getting_a_queues_config_returns_what_it_was_ensured_with() {
+    let provider = MemoryProvider::new();
+    let stored = config("orders");
+    provider
+        .ensure_queue(EnsureQueueRequest {
+            config: stored.clone(),
+        })
+        .expect("ensure_queue");
+
+    let response = provider
+        .get_queue_config(GetQueueConfigRequest {
+            queue_id: "orders".to_string(),
+        })
+        .expect("get_queue_config");
 
     assert_eq!(response.config, stored);
 }

@@ -25,7 +25,7 @@ The test list. This file is the work queue.
 - [x] ensuring a queue that does not exist reports it was created
 - [x] ensuring a queue that already exists reports it was not created
 - [x] ensuring an existing queue returns the stored config, not the requested one
-- [ ] getting a queue's config returns the config it was ensured with
+- [x] getting a queue's config returns the config it was ensured with
 - [ ] getting the config of an unknown queue fails `QUEUE_NOT_FOUND`
 - [ ] listing queues returns the queues that have been ensured
 - [ ] listing queues returns no more queues than the requested page size

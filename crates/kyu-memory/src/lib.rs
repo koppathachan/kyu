@@ -5,7 +5,8 @@ use std::sync::Mutex;
 
 use kyu_conformance::spi::{
     CONTRACT_VERSION, EnsureQueueRequest, EnsureQueueResponse, GetProviderInfoRequest,
-    GetProviderInfoResponse, Result, StorageQueueConfig,
+    GetProviderInfoResponse, GetQueueConfigRequest, GetQueueConfigResponse, Result,
+    StorageQueueConfig,
 };
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -29,6 +30,12 @@ impl MemoryProvider {
             config: stored.clone(),
             created,
         })
+    }
+
+    pub fn get_queue_config(&self, req: GetQueueConfigRequest) -> Result<GetQueueConfigResponse> {
+        let queues = self.queues.lock().expect("queues mutex");
+        let config = queues.get(&req.queue_id).expect("queue").clone();
+        Ok(GetQueueConfigResponse { config })
     }
 
     pub fn get_provider_info(
