@@ -26,40 +26,15 @@ The test list. This file is the work queue.
 - [x] a `SystemTime` converts to a proto `Timestamp` and back
 - [x] an absent proto `Duration` converts to `None`
 - [x] `MessageState` converts to its proto enum and back
-- [ ] `Outcome` converts to its proto enum and back
-- [ ] an unspecified proto `Outcome` converts to `Outcome::Unspecified`
-- [ ] an spi `Error` converts to a `tonic::Status` with the same code
-- [ ] an spi `Error` converts to a `tonic::Status` carrying the §7 reason
-- [ ] `StorageQueueConfig` round-trips through its proto form
-- [ ] `EnsureQueueRequest` round-trips through its proto form
-- [ ] `EnsureQueueResponse` round-trips through its proto form
-- [ ] `GetQueueConfigRequest` round-trips through its proto form
-- [ ] `GetQueueConfigResponse` round-trips through its proto form
-- [ ] `ListQueuesRequest` round-trips through its proto form
-- [ ] `ListQueuesResponse` round-trips through its proto form
-- [ ] `DeleteQueueRequest` round-trips through its proto form
-- [ ] `DeleteQueueResponse` round-trips through its proto form
-- [ ] `GetQueueStatsRequest` round-trips through its proto form
-- [ ] `GetQueueStatsResponse` round-trips through its proto form
-- [ ] `SaveMessageRequest` round-trips through its proto form
-- [ ] `SaveMessageResponse` round-trips through its proto form
-- [ ] `LeaseMessagesRequest` round-trips through its proto form
-- [ ] `LeasedMessage` round-trips through its proto form
-- [ ] `LeaseMessagesResponse` round-trips through its proto form
-- [ ] `RenewLeaseRequest` round-trips through its proto form
-- [ ] `RenewLeaseResponse` round-trips through its proto form
-- [ ] `StorageSettlement` round-trips through its proto form
-- [ ] `SettleMessagesRequest` round-trips through its proto form
-- [ ] `SettlementResult` round-trips through its proto form
-- [ ] `SettleMessagesResponse` round-trips through its proto form
-- [ ] `ReapExpiredLeasesRequest` round-trips through its proto form
-- [ ] `ReapExpiredLeasesResponse` round-trips through its proto form
-- [ ] `GetProviderInfoResponse` round-trips through its proto form
-
-
-<!-- §8.1.13 — Provider info -->
-
-- [x] `get_provider_info` reports `contract_version` "kyu.storage.v1"
+<!--
+  DEFERRED (option 1): the remaining conversions are written when the gRPC
+  server is built, driven by what it actually touches — request types inbound,
+  response types outbound, `Error` -> `tonic::Status`, `Outcome`. Writing them
+  up front would produce ~29 field-for-field mappings with no caller, none of
+  which §8.1 exercises. The four above exist because the adapter needed a
+  starting point; `message_state_*` has no caller either and can go if the
+  server never needs it.
+-->
 
 <!-- Queue registry — prerequisite for §8.1.1 and §8.1.11; error codes per §7 -->
 
