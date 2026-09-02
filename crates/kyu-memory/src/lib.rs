@@ -40,6 +40,8 @@ mod limits {
     pub const LEASE_TTL_MAX: Duration = Duration::from_secs(12 * 60 * 60);
     /// `settlements`: 1000 items per batch, and never empty.
     pub const SETTLEMENTS: usize = 1000;
+    /// `retry_delay`: at most 12 hours. Zero means retry immediately.
+    pub const RETRY_DELAY_MAX: Duration = Duration::from_secs(12 * 60 * 60);
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -392,6 +394,15 @@ impl MemoryProvider {
                 let found = store.iter().position(|message| {
                     message.queue_id == settlement.queue_id && message.id == settlement.message_id
                 });
+                // §4 on a per-item field, so §7's batch rule applies: report
+                // it on the item and leave the message alone.
+                if settlement.retry_delay > limits::RETRY_DELAY_MAX {
+                    return SettlementResult {
+                        message_id: settlement.message_id,
+                        code: code::INVALID_ARGUMENT,
+                        error_reason: reason::VALIDATION_FAILED.to_string(),
+                    };
+                }
                 let Some(index) = found else {
                     return SettlementResult {
                         message_id: settlement.message_id,

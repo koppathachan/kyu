@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use kyu_conformance::spi::{
     EnsureQueueRequest, Error, LeaseMessagesRequest, Outcome, RenewLeaseRequest,
-    SaveMessageRequest, SettleMessagesRequest, StorageQueueConfig, StorageSettlement,
+    SaveMessageRequest, SettleMessagesRequest, StorageQueueConfig, StorageSettlement, code, reason,
 };
 use kyu_memory::MemoryProvider;
 
@@ -324,4 +324,52 @@ fn more_than_one_thousand_settlements_fail_validation() {
             settlements: settlements(1000),
         })
         .expect("1000 is legal");
+}
+
+#[test]
+fn a_retry_delay_over_twelve_hours_fails_validation() {
+    let provider = provider_with_queue("orders");
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            ..SaveMessageRequest::default()
+        })
+        .expect("save_message");
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages")
+        .messages
+        .remove(0);
+
+    let retry_after = |retry_delay| {
+        provider
+            .settle_messages(SettleMessagesRequest {
+                settlements: vec![StorageSettlement {
+                    queue_id: "orders".to_string(),
+                    message_id: leased.message_id.clone(),
+                    lease_token: leased.lease_token.clone(),
+                    outcome: Outcome::Retry,
+                    retry_delay,
+                    dead_letter_reason: String::new(),
+                }],
+            })
+            .expect("§7: an item-level problem does not fail the RPC")
+            .results
+            .remove(0)
+    };
+
+    let over_the_limit = retry_after(Duration::from_secs(12 * 60 * 60) + Duration::from_secs(1));
+    assert_eq!(over_the_limit.code, code::INVALID_ARGUMENT);
+    assert_eq!(over_the_limit.error_reason, reason::VALIDATION_FAILED);
+
+    // 12 hours is the limit, not one past it, and the rejected settlement left
+    // the lease alone.
+    assert_eq!(
+        retry_after(Duration::from_secs(12 * 60 * 60)).code,
+        code::OK
+    );
 }
