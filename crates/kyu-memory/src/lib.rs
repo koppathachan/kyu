@@ -296,7 +296,13 @@ impl MemoryProvider {
                 .then(a.visible_at.cmp(&b.visible_at))
                 .then(a.id.cmp(&b.id))
         });
-        candidates.truncate(req.batch_size as usize);
+        // §4: a batch_size of 0 means one message, not none.
+        let batch_size = if req.batch_size == 0 {
+            1
+        } else {
+            req.batch_size as usize
+        };
+        candidates.truncate(batch_size);
 
         let messages = candidates
             .into_iter()

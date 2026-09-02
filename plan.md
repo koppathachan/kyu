@@ -145,7 +145,7 @@ The test list. This file is the work queue.
 - [x] a payload over 1 MiB fails `VALIDATION_FAILED`
 - [x] more than 16 attributes, or over 4 KiB serialised, fails `VALIDATION_FAILED`
 - [x] an idempotency key over 256 bytes fails `VALIDATION_FAILED`
-- [ ] a batch size of zero leases at most one message
+- [x] a batch size of zero leases at most one message
 - [ ] a batch size over 100 fails `VALIDATION_FAILED`
 - [ ] a lease ttl outside 1 second to 12 hours fails `VALIDATION_FAILED`
 - [ ] a renew extension outside 1 second to 12 hours fails `VALIDATION_FAILED`

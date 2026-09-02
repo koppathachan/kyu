@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use kyu_conformance::spi::{EnsureQueueRequest, Error, SaveMessageRequest, StorageQueueConfig};
+use kyu_conformance::spi::{
+    EnsureQueueRequest, Error, LeaseMessagesRequest, SaveMessageRequest, StorageQueueConfig,
+};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -157,4 +159,28 @@ fn an_oversized_idempotency_key_fails_validation() {
             ..SaveMessageRequest::default()
         })
         .expect("256 bytes is legal");
+}
+
+#[test]
+fn a_batch_size_of_zero_leases_at_most_one_message() {
+    let provider = provider_with_queue("orders");
+    for _ in 0..2 {
+        provider
+            .save_message(SaveMessageRequest {
+                queue_id: "orders".to_string(),
+                ..SaveMessageRequest::default()
+            })
+            .expect("save_message");
+    }
+
+    let leased = provider
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "orders".to_string(),
+            batch_size: 0,
+            lease_ttl: None,
+        })
+        .expect("lease_messages");
+
+    // §4: batch_size 0 means 1, not "none".
+    assert_eq!(leased.messages.len(), 1);
 }
