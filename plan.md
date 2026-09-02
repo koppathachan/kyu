@@ -23,7 +23,7 @@ The test list. This file is the work queue.
 -->
 
 - [x] a `Duration` converts to its proto form and back
-- [ ] a `SystemTime` converts to a proto `Timestamp` and back
+- [x] a `SystemTime` converts to a proto `Timestamp` and back
 - [ ] an absent proto `Duration` converts to `None`
 - [ ] `MessageState` converts to its proto enum and back
 - [ ] `Outcome` converts to its proto enum and back
