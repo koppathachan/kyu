@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use kyu_conformance::spi::{
     EnsureQueueRequest, GetQueueStatsRequest, GetQueueStatsResponse, LeaseMessagesRequest,
-    ReapExpiredLeasesRequest, SaveMessageRequest, StorageQueueConfig,
+    ReapExpiredLeasesRequest, SaveMessageRequest, StorageProvider, StorageQueueConfig,
 };
 use kyu_memory::MemoryProvider;
 

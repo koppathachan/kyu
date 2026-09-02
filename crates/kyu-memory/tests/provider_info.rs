@@ -1,6 +1,6 @@
 //! Protocol specification §8.1 requirement 13 — provider info.
 
-use kyu_conformance::spi::{CONTRACT_VERSION, GetProviderInfoRequest};
+use kyu_conformance::spi::{CONTRACT_VERSION, GetProviderInfoRequest, StorageProvider};
 use kyu_memory::MemoryProvider;
 
 #[test]

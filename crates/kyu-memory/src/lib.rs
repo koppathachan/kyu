@@ -12,8 +12,8 @@ use kyu_conformance::spi::{
     LeaseMessagesRequest, LeaseMessagesResponse, LeasedMessage, ListQueuesRequest,
     ListQueuesResponse, Outcome, ReapExpiredLeasesRequest, ReapExpiredLeasesResponse,
     RenewLeaseRequest, RenewLeaseResponse, Result, SaveMessageRequest, SaveMessageResponse,
-    SettleMessagesRequest, SettleMessagesResponse, SettlementResult, StorageQueueConfig, code,
-    reason,
+    SettleMessagesRequest, SettleMessagesResponse, SettlementResult, StorageProvider,
+    StorageQueueConfig, code, reason,
 };
 
 /// §4 limits. The defaults from the specification's table; documented here
@@ -123,8 +123,10 @@ impl MemoryProvider {
             .cloned()
             .ok_or_else(Error::queue_not_found)
     }
+}
 
-    pub fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
+impl StorageProvider for MemoryProvider {
+    fn ensure_queue(&self, req: EnsureQueueRequest) -> Result<EnsureQueueResponse> {
         let queue_id = &req.config.queue_id;
         if queue_id.is_empty() || queue_id.len() > limits::QUEUE_ID_BYTES {
             return Err(Error::validation_failed());
@@ -145,7 +147,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn get_queue_config(&self, req: GetQueueConfigRequest) -> Result<GetQueueConfigResponse> {
+    fn get_queue_config(&self, req: GetQueueConfigRequest) -> Result<GetQueueConfigResponse> {
         let queues = self.queues();
         let config = queues
             .get(&req.queue_id)
@@ -154,7 +156,7 @@ impl MemoryProvider {
         Ok(GetQueueConfigResponse { config })
     }
 
-    pub fn list_queues(&self, req: ListQueuesRequest) -> Result<ListQueuesResponse> {
+    fn list_queues(&self, req: ListQueuesRequest) -> Result<ListQueuesResponse> {
         let queues = self.queues();
         let mut page: Vec<StorageQueueConfig> = queues
             .values()
@@ -181,7 +183,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn delete_queue(&self, req: DeleteQueueRequest) -> Result<DeleteQueueResponse> {
+    fn delete_queue(&self, req: DeleteQueueRequest) -> Result<DeleteQueueResponse> {
         self.require_queue(&req.queue_id)?;
         let mut store = self.messages();
         let before = store.len();
@@ -193,7 +195,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn get_queue_stats(&self, req: GetQueueStatsRequest) -> Result<GetQueueStatsResponse> {
+    fn get_queue_stats(&self, req: GetQueueStatsRequest) -> Result<GetQueueStatsResponse> {
         self.require_queue(&req.queue_id)?;
         let now = SystemTime::now();
         let mut ready_count = 0;
@@ -219,7 +221,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
+    fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
         validate_save(&req)?;
 
         let config = self.queue_config(&req.queue_id)?;
@@ -273,7 +275,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
+    fn lease_messages(&self, req: LeaseMessagesRequest) -> Result<LeaseMessagesResponse> {
         if req.batch_size > limits::BATCH_SIZE {
             return Err(Error::validation_failed());
         }
@@ -351,7 +353,7 @@ impl MemoryProvider {
         Ok(LeaseMessagesResponse { messages })
     }
 
-    pub fn renew_lease(&self, req: RenewLeaseRequest) -> Result<RenewLeaseResponse> {
+    fn renew_lease(&self, req: RenewLeaseRequest) -> Result<RenewLeaseResponse> {
         // §4: an extension is bounded the same way a lease_ttl is.
         if req.extension < limits::LEASE_TTL_MIN || req.extension > limits::LEASE_TTL_MAX {
             return Err(Error::validation_failed());
@@ -376,7 +378,7 @@ impl MemoryProvider {
         Ok(RenewLeaseResponse { lease_expires_at })
     }
 
-    pub fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
+    fn settle_messages(&self, req: SettleMessagesRequest) -> Result<SettleMessagesResponse> {
         // §4: an empty settlement list is a request-level error, not an empty
         // result.
         if req.settlements.is_empty() || req.settlements.len() > limits::SETTLEMENTS {
@@ -457,7 +459,7 @@ impl MemoryProvider {
         Ok(SettleMessagesResponse { results })
     }
 
-    pub fn reap_expired_leases(
+    fn reap_expired_leases(
         &self,
         req: ReapExpiredLeasesRequest,
     ) -> Result<ReapExpiredLeasesResponse> {
@@ -505,10 +507,7 @@ impl MemoryProvider {
         })
     }
 
-    pub fn get_provider_info(
-        &self,
-        _req: GetProviderInfoRequest,
-    ) -> Result<GetProviderInfoResponse> {
+    fn get_provider_info(&self, _req: GetProviderInfoRequest) -> Result<GetProviderInfoResponse> {
         Ok(GetProviderInfoResponse {
             provider_name: "memory".to_string(),
             provider_version: env!("CARGO_PKG_VERSION").to_string(),
