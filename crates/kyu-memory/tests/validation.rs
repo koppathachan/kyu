@@ -2,9 +2,7 @@
 
 use std::time::Duration;
 
-use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, SaveMessageRequest, StorageQueueConfig,
-};
+use kyu_conformance::spi::{EnsureQueueRequest, Error, SaveMessageRequest, StorageQueueConfig};
 use kyu_memory::MemoryProvider;
 
 fn config(queue_id: &str) -> StorageQueueConfig {
@@ -75,4 +73,27 @@ fn an_empty_payload_is_accepted() {
             ..SaveMessageRequest::default()
         })
         .expect("§4: an empty payload is legal");
+}
+
+#[test]
+fn a_payload_over_one_mebibyte_fails_validation() {
+    let provider = provider_with_queue("orders");
+
+    let error = provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            payload: vec![0u8; 1024 * 1024 + 1],
+            ..SaveMessageRequest::default()
+        })
+        .expect_err("over the 1 MiB limit");
+
+    assert_eq!(error, Error::validation_failed());
+    // 1 MiB exactly is the limit, not one past it.
+    provider
+        .save_message(SaveMessageRequest {
+            queue_id: "orders".to_string(),
+            payload: vec![0u8; 1024 * 1024],
+            ..SaveMessageRequest::default()
+        })
+        .expect("1 MiB is legal");
 }

@@ -21,6 +21,8 @@ use kyu_conformance::spi::{
 mod limits {
     /// `queue_id`: 256 bytes, non-empty.
     pub const QUEUE_ID_BYTES: usize = 256;
+    /// `payload`: 1 MiB. An empty payload is legal.
+    pub const PAYLOAD_BYTES: usize = 1024 * 1024;
 }
 
 /// An in-memory implementation of the Kyu v1 storage provider SPI (§6).
@@ -199,6 +201,10 @@ impl MemoryProvider {
     }
 
     pub fn save_message(&self, req: SaveMessageRequest) -> Result<SaveMessageResponse> {
+        if req.payload.len() > limits::PAYLOAD_BYTES {
+            return Err(Error::validation_failed());
+        }
+
         let config = self.queue_config(&req.queue_id)?;
         let dedup_key = (req.queue_id.clone(), req.idempotency_key.clone());
         let saved_at = SystemTime::now();

@@ -142,7 +142,7 @@ The test list. This file is the work queue.
 - [x] an empty or oversized `queue_id` fails `VALIDATION_FAILED`
 - [x] `max_deliveries` below 1 fails `VALIDATION_FAILED`
 - [x] saving an empty payload is accepted
-- [ ] a payload over 1 MiB fails `VALIDATION_FAILED`
+- [x] a payload over 1 MiB fails `VALIDATION_FAILED`
 - [ ] more than 16 attributes, or over 4 KiB serialised, fails `VALIDATION_FAILED`
 - [ ] an idempotency key over 256 bytes fails `VALIDATION_FAILED`
 - [ ] a batch size of zero leases at most one message
