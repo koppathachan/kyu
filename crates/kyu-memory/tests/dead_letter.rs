@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use kyu_conformance::spi::{
     EnsureQueueRequest, GetQueueStatsRequest, GetQueueStatsResponse, LeaseMessagesRequest,
-    LeasedMessage, SaveMessageRequest, StorageQueueConfig,
+    LeasedMessage, Outcome, SaveMessageRequest, SettleMessagesRequest, StorageQueueConfig,
+    StorageSettlement,
 };
 use kyu_memory::MemoryProvider;
 
@@ -79,5 +80,29 @@ fn a_dead_lettered_message_is_never_delivered_again() {
     for _ in 0..3 {
         assert_eq!(lease(&provider, "orders", Duration::from_secs(1)).len(), 0);
     }
+    assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
+}
+
+#[test]
+fn a_message_reaching_max_deliveries_by_nack_is_dead_lettered() {
+    let provider = provider_with_queue("orders", 1, true);
+    save(&provider, "orders");
+    let leased = lease(&provider, "orders", Duration::from_secs(30)).remove(0);
+
+    let response = provider
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "orders".to_string(),
+                message_id: leased.message_id.clone(),
+                lease_token: leased.lease_token.clone(),
+                outcome: Outcome::Retry,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: String::new(),
+            }],
+        })
+        .expect("settle_messages");
+    assert_eq!(response.results[0].code, 0);
+
+    assert_eq!(lease(&provider, "orders", Duration::from_secs(30)).len(), 0);
     assert_eq!(stats(&provider, "orders").dead_letter_count, 1);
 }

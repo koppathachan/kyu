@@ -113,7 +113,7 @@ The test list. This file is the work queue.
 
 - [x] a message reaching `max_deliveries` by lease expiry moves to `DEAD_LETTER` and is counted there
 - [x] a dead-lettered message is never delivered again
-- [ ] a message reaching `max_deliveries` by nack moves to `DEAD_LETTER`
+- [x] a message reaching `max_deliveries` by nack moves to `DEAD_LETTER`
 - [ ] a forced dead-letter settlement moves a message below `max_deliveries` to `DEAD_LETTER`
 - [ ] with `dead_letter_enabled` false a dead-lettered message is deleted instead
 
