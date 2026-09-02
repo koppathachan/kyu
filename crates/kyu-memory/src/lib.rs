@@ -297,21 +297,33 @@ impl MemoryProvider {
             .map(|settlement| {
                 // §7 batch rule: item-level problems are reported per item, and
                 // a rejected item leaves its message untouched.
-                let held = store.iter().any(|message| {
+                let held = store.iter().position(|message| {
                     message.queue_id == settlement.queue_id
                         && message.id == settlement.message_id
                         && message.is_leased_at(now)
                         && message.lease_token.as_deref() == Some(&settlement.lease_token)
                 });
-                if !held {
+                let Some(index) = held else {
                     return SettlementResult {
                         message_id: settlement.message_id,
                         code: code::FAILED_PRECONDITION,
                         error_reason: reason::LEASE_LOST.to_string(),
                     };
-                }
-                if settlement.outcome == Outcome::AckDelete {
-                    store.retain(|message| message.id != settlement.message_id);
+                };
+
+                match settlement.outcome {
+                    Outcome::AckDelete => {
+                        store.remove(index);
+                    }
+                    // §3.5: the engine has already applied the backoff policy;
+                    // the provider just applies the delay it is given.
+                    Outcome::Retry => {
+                        let message = &mut store[index];
+                        message.leased_until = None;
+                        message.lease_token = None;
+                        message.visible_at = now + settlement.retry_delay;
+                    }
+                    _ => {}
                 }
                 SettlementResult {
                     message_id: settlement.message_id,

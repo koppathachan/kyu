@@ -106,7 +106,7 @@ The test list. This file is the work queue.
 
 <!-- §8.1.5 — Retry delay -->
 
-- [ ] nacking with a retry delay makes the message unleasable for that duration, then leasable
+- [x] nacking with a retry delay makes the message unleasable for that duration, then leasable
 - [ ] nacking with a zero retry delay makes the message leasable immediately
 
 <!-- §8.1.6 — Dead-lettering -->
