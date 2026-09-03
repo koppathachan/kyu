@@ -107,6 +107,8 @@ The oracle constrains where sweeping must happen more tightly than §3.3.7 does:
 
 No background thread is required by anything in §8.1. §3.3.7 permits either; lazy reclamation is simpler and has no shutdown story to get wrong.
 
+**One method sweeps differently: `ReapExpiredLeases`.** A lease has been expired for at least `grace_period` exactly when it expired at or before `now - grace_period`, so the grace period is applied by moving the sweep's *cutoff* back rather than by adding a second predicate. Sweeping at `now` first, as every other method does, would reclaim everything expired and make `grace_period` unobservable — so this is the one place where "sweep first, at `now`" would be wrong. The invariant that survives is the weaker one: no method observes state staler than the horizon it was asked about.
+
 ### D4 — `&self` methods lock and delegate; `&mut State` functions never lock
 
 `std::sync::Mutex` is not reentrant. D3 puts a `sweep` call in every method, which makes accidental re-entry a live hazard — `sweep` reaching for `self.get_queue_stats()` would deadlock rather than fail loudly.
@@ -201,6 +203,12 @@ Each of these has more than one defensible answer and no test to choose between 
 - **Settling a message that does not exist** — per-item `NOT_FOUND` / `MESSAGE_NOT_FOUND`, never an RPC-level failure (§7 batch rule).
 - **Stale-token rule, as one predicate** — `state != Leased || token != current_token` ⇒ `LEASE_LOST`. Because D3 sweeps first, an expired lease has already had its token cleared, so §3.3.4's "expiry is final, whether or not it has been redelivered" needs no separate branch.
 - **`RenewLease`** — sets `lease_expires_at = now + extension` (§3.3.3, not current-expiry-plus-extension) and does **not** rotate the token.
+- **Lease token generation** — the same monotonic counter as D6's message ids, formatted `lt-{:020}`. Uniqueness is what §3.3.1 asks for, the counter already provides it, and the prefix keeps a token from ever colliding with a message id. No second counter and no UUID crate, for the same reason as D6.
+- **`saved_at` on a deduplicated save** — the **original** message's save time, reconstructed from `DedupRecord.created_at`, not the clock at the duplicate attempt. The response names the original message; reporting the duplicate's clock would describe a save that never happened. The reconstruction is approximate to within the microseconds separating `Instant::now()` from `SystemTime::now()` in a single capture, which no caller can act on.
+- **`sweep` counting a dropped message** — a message discarded because its queue has `dead_letter_enabled = false` counts under `moved_to_dead_letter`. The SPI has no third counter, the message took the dead-letter route, and it certainly did not return to ready.
+- **`retry_delay`'s §4 bound is enforced per item, not per request** — §7's batch rule reserves RPC-level failure for request-level problems, and `retry_delay` is a field of one settlement. One malformed item must not discard the valid settlements sent with it. Only the batch's own shape (non-empty, ≤ 1000) fails the RPC. Checked only for `OUTCOME_RETRY`, the one outcome §6 says the field is meaningful for.
+- **`dead_letter_reason` on a nack that hits the limit** — a caller-supplied reason wins if there is one, so this route records the same way a forced dead-letter does; the literal `"max_deliveries exceeded"` is the fallback. Note that no v1 RPC returns the field, so this is unobservable through the SPI and is not covered by a test.
+- **`ListQueues.page_size`** — §4 sets no bound, but a negative count is meaningless and is rejected rather than silently read as "all", which is what a zero means.
 
 ## Risks / Trade-offs
 

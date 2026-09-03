@@ -45,7 +45,7 @@ All timestamps the provider returns SHALL be on the provider's own clock, and al
 - **THEN** the provider rejects it with `LEASE_LOST` regardless of any timestamp the caller holds
 
 ### Requirement: Request validation
-The provider SHALL reject malformed requests and requests exceeding its documented limits with `INVALID_ARGUMENT` / `VALIDATION_FAILED`. The enforced limits SHALL be: `payload` at most 1 MiB; `attributes` at most 16 entries and 4 KiB serialised; `idempotency_key` at most 256 bytes; `queue_id` non-empty and at most 256 bytes; `settlements` non-empty and at most 1000 items; `retry_delay` at most 12 hours; `lease_ttl` and `RenewLease.extension` at most 12 hours; `batch_size` at most 100; `max_deliveries` at least 1.
+The provider SHALL reject malformed requests and requests exceeding its documented limits with `INVALID_ARGUMENT` / `VALIDATION_FAILED`. The enforced limits SHALL be: `payload` at most 1 MiB; `attributes` at most 16 entries and 4 KiB serialised, measured as the sum of every key and value in bytes with no allowance for encoding framing; `idempotency_key` at most 256 bytes; `queue_id` non-empty and at most 256 bytes; `settlements` non-empty and at most 1000 items; `retry_delay` at most 12 hours; `lease_ttl` and `RenewLease.extension` at most 12 hours; `batch_size` at most 100; `max_deliveries` at least 1.
 
 The minimum of 1 second on `lease_ttl` and `extension` SHALL NOT be enforced. That limit is stated in §4 in the client API's vocabulary and binds a provider only by analogy, and the §8.1 conformance scenarios lease with a 300 ms TTL; where the analogy contradicts §8.1, §8.1 governs.
 

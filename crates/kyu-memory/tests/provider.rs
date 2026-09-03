@@ -2,7 +2,7 @@
 //! design D9 decisions, and the §4 limits of design D8.
 
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use kyu_conformance::spi::*;
 use kyu_memory::MemoryProvider;
@@ -47,6 +47,13 @@ fn lease_one(p: &MemoryProvider, queue_id: &str) -> LeasedMessage {
     .messages
     .pop()
     .expect("a message must be leasable")
+}
+
+fn stats(p: &MemoryProvider, queue_id: &str) -> GetQueueStatsResponse {
+    p.get_queue_stats(GetQueueStatsRequest {
+        queue_id: queue_id.to_string(),
+    })
+    .expect("get_queue_stats failed")
 }
 
 fn expect_validation_failed<T: std::fmt::Debug>(r: Result<T>, what: &str) {
@@ -321,6 +328,14 @@ fn oversized_requests_are_rejected() {
         }),
         "a batch_size over 100",
     );
+
+    expect_validation_failed(
+        p.list_queues(ListQueuesRequest {
+            page_size: -1,
+            page_token: String::new(),
+        }),
+        "a negative page_size",
+    );
     expect_validation_failed(
         p.lease_messages(LeaseMessagesRequest {
             queue_id: "q".into(),
@@ -338,20 +353,6 @@ fn oversized_requests_are_rejected() {
             extension: OVER_TWELVE_HOURS,
         }),
         "an extension over 12 hours",
-    );
-
-    expect_validation_failed(
-        p.settle_messages(SettleMessagesRequest {
-            settlements: vec![StorageSettlement {
-                queue_id: "q".into(),
-                message_id: "m".into(),
-                lease_token: "t".into(),
-                outcome: Outcome::Retry,
-                retry_delay: OVER_TWELVE_HOURS,
-                dead_letter_reason: String::new(),
-            }],
-        }),
-        "a retry_delay over 12 hours",
     );
 
     let thousand_and_one: Vec<StorageSettlement> = (0..1001)
@@ -447,4 +448,193 @@ fn queue_scoped_requests_reject_an_unknown_queue() {
             (code::NOT_FOUND, reason::QUEUE_NOT_FOUND)
         );
     }
+}
+
+// --- W1: a per-item limit fails only its own item -------------------------
+
+/// §7's batch rule: an oversized `retry_delay` on one settlement must not
+/// discard the valid settlements sent alongside it.
+#[test]
+fn an_oversized_retry_delay_fails_only_its_own_item() {
+    let p = MemoryProvider::new();
+    ensure(&p, cfg("q"));
+    save(&p, "q");
+    let live = lease_one(&p, "q");
+
+    let bad = StorageSettlement {
+        queue_id: "q".into(),
+        message_id: "other".into(),
+        lease_token: "t".into(),
+        outcome: Outcome::Retry,
+        retry_delay: OVER_TWELVE_HOURS,
+        dead_letter_reason: String::new(),
+    };
+    let good = StorageSettlement {
+        queue_id: "q".into(),
+        message_id: live.message_id.clone(),
+        lease_token: live.lease_token.clone(),
+        outcome: Outcome::AckDelete,
+        retry_delay: Duration::ZERO,
+        dead_letter_reason: String::new(),
+    };
+
+    let results = p
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![bad, good],
+        })
+        .expect("a per-item limit must not fail the RPC")
+        .results;
+
+    assert_eq!(
+        (results[0].code, results[0].error_reason.as_str()),
+        (code::INVALID_ARGUMENT, reason::VALIDATION_FAILED),
+        "the oversized item fails on its own"
+    );
+    assert_eq!(results[1].code, code::OK, "the valid item is still applied");
+    assert_eq!(
+        stats(&p, "q"),
+        GetQueueStatsResponse {
+            ready_count: 0,
+            leased_count: 0,
+            dead_letter_count: 0
+        },
+        "the valid ack really took effect"
+    );
+}
+
+// --- W2: a dedup hit reports the original save time -----------------------
+
+#[test]
+fn a_deduplicated_save_reports_the_original_saved_at() {
+    let p = MemoryProvider::new();
+    ensure(&p, cfg("d"));
+    let req = || SaveMessageRequest {
+        queue_id: "d".into(),
+        idempotency_key: "k".into(),
+        ..Default::default()
+    };
+
+    let first = p.save_message(req()).expect("save_message failed");
+    std::thread::sleep(Duration::from_millis(300));
+    let second = p.save_message(req()).expect("save_message failed");
+
+    assert!(second.deduplicated);
+    // Reconstructing a wall-clock time from a stored `Instant` is approximate
+    // in both directions: `Now::capture` reads the two clocks microseconds
+    // apart, so the reconstruction can land just either side of the original.
+    // The point of the assertion is the 300 ms, not the microseconds.
+    let drift = second
+        .saved_at
+        .duration_since(first.saved_at)
+        .unwrap_or_else(|e| e.duration());
+    assert!(
+        drift < Duration::from_millis(50),
+        "saved_at must describe the ORIGINAL save, not the duplicate attempt \
+         300 ms later; drifted {drift:?}"
+    );
+}
+
+// --- W3: paths no test previously executed --------------------------------
+
+/// The `lease_ttl: None` branch — every other test supplies an explicit TTL.
+#[test]
+fn an_omitted_lease_ttl_uses_the_queue_default() {
+    let p = MemoryProvider::new();
+    ensure(&p, cfg("defaulted")); // default_lease_ttl = 30s
+    save(&p, "defaulted");
+
+    let leased = p
+        .lease_messages(LeaseMessagesRequest {
+            queue_id: "defaulted".into(),
+            batch_size: 1,
+            lease_ttl: None,
+        })
+        .expect("lease_messages failed")
+        .messages;
+    assert_eq!(leased.len(), 1);
+
+    let remaining = leased[0]
+        .lease_expires_at
+        .duration_since(SystemTime::now())
+        .expect("the lease must expire in the future");
+    assert!(
+        remaining > TTL - Duration::from_secs(5) && remaining <= TTL,
+        "an omitted lease_ttl must fall back to the queue's 30s default, got {remaining:?}"
+    );
+}
+
+/// A forced dead-letter in a queue with dead-lettering disabled: the drop path
+/// was only ever reached via a nack.
+#[test]
+fn a_forced_dead_letter_is_dropped_when_dead_lettering_is_disabled() {
+    let p = MemoryProvider::new();
+    let mut dropping = cfg("forced-off");
+    dropping.dead_letter_enabled = false;
+    ensure(&p, dropping);
+    save(&p, "forced-off");
+    let m = lease_one(&p, "forced-off");
+
+    let results = p
+        .settle_messages(SettleMessagesRequest {
+            settlements: vec![StorageSettlement {
+                queue_id: "forced-off".into(),
+                message_id: m.message_id.clone(),
+                lease_token: m.lease_token.clone(),
+                outcome: Outcome::DeadLetter,
+                retry_delay: Duration::ZERO,
+                dead_letter_reason: "poison".into(),
+            }],
+        })
+        .expect("settle_messages failed")
+        .results;
+
+    assert_eq!(results[0].code, code::OK);
+    assert_eq!(
+        stats(&p, "forced-off"),
+        GetQueueStatsResponse {
+            ready_count: 0,
+            leased_count: 0,
+            dead_letter_count: 0
+        },
+        "with dead-lettering disabled a forced dead-letter deletes instead (§3.6)"
+    );
+}
+
+/// `ReapExpiredLeases` reporting a non-zero `moved_to_dead_letter` — r12 only
+/// ever asserts that count is zero.
+#[test]
+fn reaping_reports_messages_it_dead_letters() {
+    let p = MemoryProvider::new();
+    let mut once = cfg("reap-dlq");
+    once.max_deliveries = 1;
+    ensure(&p, once);
+    save(&p, "reap-dlq");
+
+    p.lease_messages(LeaseMessagesRequest {
+        queue_id: "reap-dlq".into(),
+        batch_size: 1,
+        lease_ttl: Some(Duration::from_millis(200)),
+    })
+    .expect("lease_messages failed");
+    std::thread::sleep(Duration::from_millis(450));
+
+    let reaped = p
+        .reap_expired_leases(ReapExpiredLeasesRequest {
+            grace_period: Duration::ZERO,
+        })
+        .expect("reap_expired_leases failed");
+
+    assert_eq!(
+        (reaped.returned_to_ready, reaped.moved_to_dead_letter),
+        (0, 1),
+        "a message at max_deliveries is counted as dead-lettered, not returned to ready"
+    );
+    assert_eq!(
+        stats(&p, "reap-dlq"),
+        GetQueueStatsResponse {
+            ready_count: 0,
+            leased_count: 0,
+            dead_letter_count: 1
+        }
+    );
 }

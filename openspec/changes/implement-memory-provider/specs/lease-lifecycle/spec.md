@@ -80,3 +80,7 @@ A settlement with outcome `OUTCOME_RETRY` SHALL return the message to `READY` wi
 #### Scenario: An empty batch
 - **WHEN** `SettleMessages` is called with no settlements
 - **THEN** the RPC fails with code `INVALID_ARGUMENT` and reason `VALIDATION_FAILED`
+
+#### Scenario: One item exceeds a per-item limit
+- **WHEN** a batch contains one settlement whose `retry_delay` exceeds 12 hours alongside one valid settlement
+- **THEN** the RPC succeeds, the oversized item's own result is `INVALID_ARGUMENT` / `VALIDATION_FAILED`, and the valid settlement is applied

@@ -170,9 +170,12 @@ fn do_save_message(
         && let Some(record) = queue.dedup.get(&req.idempotency_key)
         && now.instant.saturating_duration_since(record.created_at) < queue.config.dedup_window
     {
+        // `saved_at` describes the save this response names, which is the
+        // original one — reporting the duplicate attempt's clock would
+        // describe a save that never happened.
         return Ok(SaveMessageResponse {
             message_id: record.message_id.clone(),
-            saved_at: now.sys,
+            saved_at: now.to_system(record.created_at),
             deduplicated: true,
         });
     }
@@ -342,6 +345,16 @@ fn settle_one(st: &mut State, now: Now, s: StorageSettlement) -> SettlementResul
         error_reason: e.reason,
     };
 
+    // §4's `retry_delay` bound is a property of one settlement, so it fails
+    // that settlement and no other: §7's batch rule reserves RPC-level failure
+    // for request-level problems. Checked only for `Retry`, the one outcome
+    // the SPI says the field is meaningful for.
+    if s.outcome == Outcome::Retry
+        && let Err(e) = validate::retry_delay(s.retry_delay)
+    {
+        return failed(s.message_id, e);
+    }
+
     let Some(queue) = st.queues.get_mut(&s.queue_id) else {
         return failed(s.message_id, Error::queue_not_found());
     };
@@ -365,7 +378,15 @@ fn settle_one(st: &mut State, now: Now, s: StorageSettlement) -> SettlementResul
         Outcome::Retry => {
             // §4 default: a `retry_delay` of zero retries immediately.
             let visible_at = now.instant + s.retry_delay;
-            if release(msg, config, visible_at, "max_deliveries exceeded") == Released::Dropped {
+            // A caller-supplied reason wins if there is one, so a nack that
+            // happens to hit the limit records it the same way a forced
+            // dead-letter would; otherwise the route itself is the reason.
+            let reason = if s.dead_letter_reason.is_empty() {
+                "max_deliveries exceeded"
+            } else {
+                &s.dead_letter_reason
+            };
+            if release(msg, config, visible_at, reason) == Released::Dropped {
                 messages.remove(&s.message_id);
             }
         }
@@ -434,6 +455,7 @@ impl StorageProvider for MemoryProvider {
     }
 
     fn list_queues(&self, req: ListQueuesRequest) -> Result<ListQueuesResponse> {
+        validate::list_queues(&req)?;
         let now = Now::capture();
         let mut st = self.lock();
         sweep(&mut st, now.instant, now.instant);

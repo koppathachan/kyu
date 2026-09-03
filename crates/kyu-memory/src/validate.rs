@@ -8,8 +8,8 @@
 use std::time::Duration;
 
 use kyu_conformance::spi::{
-    EnsureQueueRequest, Error, LeaseMessagesRequest, RenewLeaseRequest, Result, SaveMessageRequest,
-    SettleMessagesRequest,
+    EnsureQueueRequest, Error, LeaseMessagesRequest, ListQueuesRequest, RenewLeaseRequest, Result,
+    SaveMessageRequest, SettleMessagesRequest,
 };
 
 const MAX_PAYLOAD: usize = 1024 * 1024;
@@ -64,6 +64,9 @@ pub fn save_message(req: &SaveMessageRequest) -> Result<()> {
     if req.attributes.len() > MAX_ATTRIBUTES {
         return fail();
     }
+    // "4 KiB serialised" measured as the payload bytes themselves — the sum of
+    // every key and value — with no allowance for encoding framing, which the
+    // SPI does not specify.
     let attribute_bytes: usize = req.attributes.iter().map(|(k, v)| k.len() + v.len()).sum();
     if attribute_bytes > MAX_ATTRIBUTES_BYTES {
         return fail();
@@ -90,16 +93,33 @@ pub fn renew_lease(req: &RenewLeaseRequest) -> Result<()> {
     lease_duration(req.extension)
 }
 
-/// Request-level validation only. Item-level problems are per-item results,
-/// never an RPC failure (§7, batch rule).
+/// Request-level validation only: the batch's own shape.
+///
+/// Per-item limits are deliberately absent. §7's batch rule reserves RPC-level
+/// failure for request-level problems, so one malformed settlement must not
+/// discard the valid ones alongside it; see [`retry_delay`], applied per item
+/// in `settle_one`.
 pub fn settle_messages(req: &SettleMessagesRequest) -> Result<()> {
     if req.settlements.is_empty() || req.settlements.len() > MAX_SETTLEMENTS {
         return fail();
     }
-    for s in &req.settlements {
-        if s.retry_delay > TWELVE_HOURS {
-            return fail();
-        }
+    Ok(())
+}
+
+/// One settlement's `retry_delay`. Applied per item, never to the batch.
+pub fn retry_delay(d: Duration) -> Result<()> {
+    if d > TWELVE_HOURS {
+        return fail();
+    }
+    Ok(())
+}
+
+/// `ListQueues.page_size`: §4 sets no upper bound, but a negative count is
+/// meaningless. Rejected rather than silently read as "all", which is what a
+/// zero means.
+pub fn list_queues(req: &ListQueuesRequest) -> Result<()> {
+    if req.page_size < 0 {
+        return fail();
     }
     Ok(())
 }

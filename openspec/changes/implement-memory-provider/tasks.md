@@ -13,7 +13,7 @@
 
 - [x] 2.1 Write `sweep(&mut State, now: Instant)` implementing design D5's transition table: expired leases and nack-released messages at or past `max_deliveries` become `DEAD_LETTER`, or are deleted when `dead_letter_enabled` is false; everything else below the limit becomes visible `READY`
 - [x] 2.2 Make `sweep` return `(returned_to_ready, moved_to_dead_letter)` counts so `ReapExpiredLeases` can report them, and confirm it is idempotent when nothing has expired
-- [x] 2.3 Establish the D4 method shape for all thirteen trait methods: lock, capture `now`, call `sweep`, delegate to a `&mut State` free function; add a module comment stating that no public method may call another
+- [x] 2.3 Establish the D4 method shape for all eleven trait methods: lock, capture `now`, call `sweep`, delegate to a `&mut State` free function; add a module comment stating that no public method may call another
 - [x] 2.4 Add `queue_mut(&mut State, &str) -> Result<&mut Queue>` returning `NOT_FOUND` / `QUEUE_NOT_FOUND`, and use it everywhere a `queue_id` is dereferenced
 
 ## 3. Queue registry
