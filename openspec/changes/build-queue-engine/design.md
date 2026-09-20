@@ -467,6 +467,65 @@ Thirty seconds of hold is a compromise: it is the recovery time after an
 engine crash, which argues shorter, and the budget a slow consumer gets
 before its message is taken away, which argues longer.
 
+### The repository is structured by domain, and the contracts sit apart from it
+
+The layout follows the project's Go template: contracts under `api/`,
+generated code committed beside the package it belongs to, one directory per
+binary under `cmd/` named after the binary, container files under
+`build/package/`, build scripts under `scripts/`.
+
+```text
+  api/kyu/v1/kyu.proto              package kyu.v1
+  api/kyu/storage/v1/storage.proto  package kyu.storage.v1
+        │  buf, out: "." + paths=source_relative
+        ▼
+  kyu/v1/  kyu/storage/v1/          generated, committed, public
+
+  internal/          the implementation — importable by nobody
+    queue/           what a queue *is*: settings, lease token, names, ordering
+    spi/             how storage is reached: client, errors
+    reaper/          dead letter transfer: policy, sweeper
+    engine/          the kyu.v1.Kyu service, and its configuration
+    storage/memory/  the reference backend
+```
+
+Each package under `internal/` is a domain rather than a layer. `queue` is the
+vocabulary, and holds no I/O at all: every function is a total function of its
+arguments, and its dependency tree reaches nothing outside the standard
+library — not even gRPC, because which status a refusal deserves is the
+engine's judgement rather than the vocabulary's. That is what makes the rules
+the engine is built from checkable without a server. `spi` is the only thing
+that reaches storage. `reaper` holds no queue state — give it a name and a
+ceiling and it sweeps — so lifting it into a separate binary later stays the
+mechanical change the risks section claims it is.
+
+Inside `engine`, two types carry what used to be loose fields. `registry` holds
+the four facts that always move together — which queues are served, which
+cannot be read, which were absent recently, and which have a sweep running —
+because every transition touches more than one of them. `errors.go` is where
+every status a client receives is constructed, with the table from
+`specs/error-model` beside it, so the requirement that no status is reused for
+an outcome it does not name is checkable by reading one file.
+
+Only the generated packages are public. The reference storage server is a
+fixture, and a fixture that other people's code can import is a fixture that
+turns into a dependency.
+
+*The proto package keeps its version.* The template versions at the directory
+(`api/v1/<domain>`) and drops the version from the proto package. That would
+delete the guarantee `specs/storage-spi` is built on — the contract version
+*is* the package, which is what makes a backend serving another version fail
+its first call with `UNIMPLEMENTED` instead of half-working. So the module
+roots at `api/` and the directory mirrors the package, version and all.
+
+*Tests never share a package with the code they test.* Every `_test.go` file
+declares `package <name>_test`. A test that cannot reach what it needs is
+evidence about the API, not about the test: either the thing belongs in the
+exported surface, or the test is aimed at the wrong level and should be making
+its assertion through the behaviour instead. The engine's tests, in particular,
+now drive it through `kyu.v1.Kyu` and read results through
+`kyu.storage.v1.Storage` — the two things a deployment actually has.
+
 ## Risks / Trade-offs
 
 **A storage implementation that assigns positions out of order breaks FIFO

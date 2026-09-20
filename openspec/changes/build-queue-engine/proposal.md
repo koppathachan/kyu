@@ -22,14 +22,15 @@ gRPC, against a storage server the engine reaches only through the SPI.
 ## What Changes
 
 **BREAKING** — the existing `q.Q` service and the `store.Store` interface are
-replaced entirely. Nothing in `q/`, `proto/q/` or `cmd/q/` survives. The
+replaced entirely. Nothing in `q/`, its IDL or `cmd/q/` survives. The
 pub/sub service goes with them: it is a gRPC client of `q.Q` and its generated
 code carries `q/msg` types, so it cannot outlive the service it consumes.
 Whether kyu offers pub/sub again is a question for a later change.
 
-- **Two contracts, one root.** `proto/kyu/v1/kyu.proto` is what applications
-  call. `proto/kyu/storage/v1/storage.proto` is what deployments implement.
-  Generated Go code is committed under `gen/`, which is what Go expects: a
+- **Two contracts, one root.** `api/kyu/v1/kyu.proto` is what applications
+  call. `api/kyu/storage/v1/storage.proto` is what deployments implement.
+  Generated Go code is committed beside the package it belongs to, under
+  `kyu/`, which is what Go expects: a
   consumer runs `go get` and builds, with no `buf` and no plugins. CI fails if
   what is committed is not what regeneration produces.
 
@@ -118,14 +119,14 @@ None. `openspec/specs/` is empty.
 
 ## Impact
 
-- **Removed**: `q/`, `proto/q/`, `cmd/q/`, and with them `pubsub/`,
-  `proto/pubsub/`, `cmd/pubsub/`, which imported them, and `scripts/`. The
+- **Removed**: `q/`, its IDL, `cmd/q/`, and with them `pubsub/`, its IDL and
+  `cmd/pubsub/`, which imported them. The
   MongoDB dependency leaves with the queue path, and `go.mod` is left with no
   requirements at all.
 - **Replaced**: the `Makefile`, deleted along with the binaries it drove and
   reintroduced by this change with targets for regeneration and for running
   the engine and the reference server.
-- **Added**: `proto/` as the contract root; a `buf` codegen pipeline; `gen/`,
+- **Added**: `api/` as the contract root; a `buf` codegen pipeline; `kyu/`,
   the generated Go code, committed; the engine, the reference storage server
   and their binaries.
 - **Untouched**: `LICENSE`, `.gitignore` and the module path.
@@ -135,7 +136,7 @@ None. `openspec/specs/` is empty.
   needs no network and cannot drift between machines. `buf` compiles the
   protos itself; `protoc` is present but is not on the generation path.
 - **CI**: two new gates — `buf` breaking-change detection against the previous
-  commit for `proto/`, and a codegen-drift check that fails if regeneration
+  commit for `api/`, and a codegen-drift check that fails if regeneration
   changes the working tree.
 - **Anyone deploying kyu** must now run a storage server or write one. There
   is no embedded default.

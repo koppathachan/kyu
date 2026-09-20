@@ -1,0 +1,85 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  kyu is a message queue that runs on storage it does not implement. The queue
+  semantics are written once, in an engine kyu ships; durability is written by
+  whoever deploys it, behind a gRPC interface they implement themselves.
+
+  Go 1.27, single module, github.com/sasidakh/kyu. gRPC and Protocol Buffers,
+  generated with buf. No third-party runtime dependencies beyond grpc and
+  protobuf.
+
+  ## Repository layout
+
+  The layout follows https://github.com/chaamba/go-template: contracts under
+  api/, generated code committed beside the package it belongs to, one
+  directory per binary under cmd/ with the file named after the binary,
+  container files under build/package/, and build scripts under scripts/.
+
+      api/                          the contract root, and the sole proto path
+        kyu/v1/kyu.proto            package kyu.v1 — what applications call
+        kyu/storage/v1/storage.proto package kyu.storage.v1 — what deployments implement
+      kyu/                          generated Go, committed, public
+        v1/  storage/v1/
+      internal/                     the implementation; nothing here is importable
+        queue/                      domain vocabulary, no I/O: settings, lease
+                                    token, name rules, position ordering
+        spi/                        the only reach into storage: client + errors
+        reaper/                     sweep policy and the sweep loop
+        engine/                     the kyu.v1.Kyu service, and its config
+        storage/memory/             reference storage server — a fixture
+      cmd/<binary>/<binary>.go      one directory per binary
+      build/package/<binary>.Dockerfile
+      scripts/                      build scripts
+      openspec/                     this workflow
+
+  ## Conventions
+
+  - **Structure by domain.** A package is a domain, not a layer. internal/queue
+    holds what a queue *is*; internal/spi holds how storage is reached;
+    internal/reaper holds dead letter transfer. A change that adds a concept
+    adds a package rather than a file to engine/.
+  - **internal/ for the implementation, root for the contracts.** Only the
+    generated packages under kyu/ are importable by anyone depending on the
+    module. The reference storage server is explicitly not a backend and must
+    not become public API.
+  - **One place chooses statuses.** Every gRPC status the engine returns to a
+    client is constructed in internal/engine/errors.go, which carries the table
+    from specs/error-model as a comment. Reading a status the backend returned
+    is a different act and stays where the call is made. The rule exists so
+    that "no status is reused for an outcome the table does not name it for" is
+    checkable by reading one file.
+  - **The domain package imports no transport.** internal/queue depends on
+    nothing outside the standard library — not even gRPC. Which status a
+    refusal deserves is the engine's judgement, so queue returns plain sentinel
+    errors and the engine maps them.
+  - **Tests never share a package with the code.** Every _test.go file declares
+    package <name>_test and exercises the package through its exported API. A
+    test that needs an unexported thing is telling you the thing should be
+    exported, or that the test is aimed at the wrong level.
+  - **The proto package is the contract version.** kyu.v1 and kyu.storage.v1
+    move for different reasons and are versioned separately, which is why the
+    buf module roots at api/ rather than at api/v1. A change that breaks a
+    contract takes a new package; `make breaking` catches the rest.
+  - **The directory under api/ mirrors the proto package exactly**, so a
+    package name and a file path cannot disagree.
+  - **Generated code is committed.** `go get` and `go build` need nothing else —
+    no buf, no plugins, no generation step. `make generate-check` is the gate
+    that keeps it in step.
+  - **Comments carry the argument, not the mechanics.** The protos are the
+    whole of what a backend implementer receives, so every atomicity, ordering
+    and clock requirement is stated in the file itself.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+rules:
+  design:
+    - State where new code goes in the layout above, and say so in the
+      Decisions section rather than leaving it to the tasks.
+    - A new domain concept is a new package under internal/, not a new file in
+      internal/engine.
+  tasks:
+    - Name the package a task creates or changes, using the paths above.
+    - A task that adds behaviour adds a test in that package's _test package.
