@@ -1,0 +1,21 @@
+# api/ is the contract root and the sole proto path: the directory under it
+# mirrors the proto package exactly, so a package name and a file path cannot
+# disagree.
+#
+# The module roots at api/ rather than at api/v1, because each contract carries
+# its own version in its package — kyu.v1 and kyu.storage.v1 move for different
+# reasons and are not versioned together. See the layout note in
+# openspec/config.yaml.
+version: v2
+modules:
+  - path: api
+lint:
+  use:
+    - STANDARD
+  except:
+    # The service names are fixed by the specifications: kyu.v1.Kyu and
+    # kyu.storage.v1.Storage. "KyuService" would read as a second thing.
+    - SERVICE_SUFFIX
+breaking:
+  use:
+    - FILE

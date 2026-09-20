@@ -1,0 +1,20 @@
+# Generated code is committed, and lands beside the package it belongs to:
+# api/kyu/v1/kyu.proto generates kyu/v1/kyu.pb.go. The module roots at api/ and
+# paths=source_relative carries the rest of the path through, so the Go import
+# path and the proto package agree by construction.
+#
+# It is committed because that is the Go convention and what makes the module
+# usable with `go get` alone — no buf, no plugins, no generation step before a
+# build. `make generate-check` is what keeps it in step.
+#
+# Plugin versions are pinned by the tool directives in go.mod rather than by
+# remote plugin references, so generating requires no network and cannot drift
+# between one machine and another.
+version: v2
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: .
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-go-grpc"]
+    out: .
+    opt: paths=source_relative

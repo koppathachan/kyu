@@ -10,18 +10,23 @@ deployments on two different backends cannot disagree about what a queue does.
 
 ## Status
 
-**The contracts exist; the queue does not.** Both `.proto` files are written,
-Go code generates from them, and `kyu-engine` serves `kyu.v1.Kyu` over gRPC —
-with every method returning `UNIMPLEMENTED`. There is no engine logic, no
-storage server and no reaper yet. The Go/MongoDB prototype that used to live
-here has been deleted: it marked messages read the instant it sent them, and
-had no leases, no acknowledgement, no retry and no dead letters.
+**The queue runs.** A message can be enqueued, leased, redelivered after a
+failure with its attempt count rising, dead-lettered when its attempts run
+out, and deleted on acknowledgement — over gRPC, against a storage server the
+engine reaches only through the storage interface. Both dequeue forms work and
+observe the same semantics. There is a reference in-memory storage server, and
+a reaper that transfers exhausted messages with no consumer asking.
+
+The Go/MongoDB prototype that used to live here has been deleted: it marked
+messages read the instant it sent them, and had no leases, no acknowledgement,
+no retry and no dead letters.
+
+Not here yet: consuming or inspecting a dead letter queue, redrive, priorities,
+retention, deduplication, delayed delivery, and any judgement of a third-party
+storage implementation. See the non-goals in
+[`design.md`](openspec/changes/build-queue-engine/design.md).
 
 The specification is in [`openspec/changes/build-queue-engine/`](openspec/changes/build-queue-engine/).
-"Done" for that change means a message has been enqueued, leased, redelivered
-after a failure, dead-lettered on its last attempt and acknowledged on
-success — over gRPC, against a storage server the engine reaches only through
-the storage interface.
 
 ## The shape of it
 
@@ -128,15 +133,30 @@ stated inside one signature is the only kind an implementer reliably honours.
 ## Repository layout
 
 ```text
-proto/                   the contract root, and the sole proto path
-  buf.yaml               module, lint and breaking-change configuration
-  buf.gen.yaml           what is generated, and with which plugins
+buf.yaml                 module, lint and breaking-change configuration
+buf.gen.yaml             what is generated, and with which plugins
+
+api/                     the contract root, and the sole proto path
   kyu/v1/kyu.proto               what applications call
   kyu/storage/v1/storage.proto   what deployments implement
-cmd/kyu-engine/          the engine binary
-internal/engine/         the engine
-gen/                     generated Go code, committed and kept in step
+
+kyu/                     generated Go, committed and kept in step
+  v1/  storage/v1/
+
+internal/                the implementation; importable by nobody
+  queue/                 what a queue is: settings, lease token, names, ordering
+  spi/                   the only reach into storage: client, errors
+  reaper/                dead letter transfer: sweep policy, sweeper
+  engine/                the kyu.v1.Kyu service, and its configuration
+  storage/memory/        the reference storage server — a fixture, not a backend
+
+cmd/kyu/                 the engine binary
+cmd/kyu-memstore/        the reference storage server binary
+build/package/           a Dockerfile per binary
+scripts/                 build scripts
+
 openspec/
+  config.yaml            the layout and conventions above, for this workflow
   changes/build-queue-engine/
     proposal.md          why this change exists and what it changes
     design.md            the decisions, their alternatives, the diagrams
@@ -145,51 +165,198 @@ openspec/
   specs/                 accepted specifications (empty until the first archive)
 ```
 
-The directory under `proto/` mirrors the proto package exactly, so a package
-name and a file path cannot disagree. The generated Go code in `gen/` is
-committed, as Go expects — `go get` and `go build` need nothing else. It is
-rebuilt by `make generate`, and CI fails if what is committed is not what
+The directory under `api/` mirrors the proto package exactly, so a package
+name and a file path cannot disagree, and generated code lands beside the
+package it belongs to: `api/kyu/v1/kyu.proto` produces `kyu/v1/kyu.pb.go`. It
+is committed, as Go expects — `go get` and `go build` need nothing else — and
+rebuilt by `make generate`, with CI failing if what is committed is not what
 regeneration produces.
+
+Each package under `internal/` is a domain rather than a layer. `queue` holds
+the vocabulary and performs no I/O at all, so the rules the engine is built
+from can be checked without a server. Only the generated packages are public:
+the reference storage server is a fixture, and a fixture other people can
+import becomes a dependency.
+
+Every `_test.go` file declares `package <name>_test` and exercises its package
+through the exported API. The engine's tests drive it through `kyu.v1.Kyu` and
+read results through `kyu.storage.v1.Storage` — the two things a deployment
+actually has.
 
 Read `proposal.md` first, then `design.md` — the design carries the arguments
 and the diagrams — then the capability specs for the requirements themselves.
 
-Still to come: the engine's logic, a reference in-memory storage server, and
-the reaper. Anyone deploying kyu will need to run a storage server or write
-one — there is no embedded default, and the reference server, when it exists,
-is a test fixture and a worked example, not a production backend.
+## Deploying it
 
-## Running what there is
+**A deployment must supply a storage server.** The engine embeds no backend and
+there is no default: `kyu` refuses to start without `-storage` or
+`KYU_STORAGE`. What a deployment implements is `kyu.storage.v1.Storage`, whose
+eight operations are listed above and specified in full in
+[`api/kyu/storage/v1/storage.proto`](api/kyu/storage/v1/storage.proto) —
+the comments there are the contract, not a summary of it. It is gRPC, so it can
+be written in any language.
+
+**The reference server in `cmd/kyu-memstore` is not such a backend.** It
+holds everything in process memory: stop it and every message is gone. It
+exists so that the contract has a worked example and so that kyu's own tests
+run against a real backend over a real socket.
+
+## Running it
 
 Building and running need Go 1.27 and nothing else, because the generated
 code is committed:
 
 ```sh
-make build        # build every binary
-make run-engine   # serve kyu.v1.Kyu on 127.0.0.1:50051
+make build        # build every binary into bin/
+make test         # run the tests
 make help         # every target
 ```
+
+### A queue from a cold start
+
+Two processes. In one terminal, the reference storage server:
+
+```sh
+make run-memstore   # kyu.storage.v1.Storage on 127.0.0.1:50052
+```
+
+(`make -j2 run` starts both at once, once you no longer want them separate.)
+
+In another, the engine pointed at it. A short sweep interval is used here so
+that a dead letter transfer happens while you are watching; the default floor
+is a second, and it backs off to thirty:
+
+```sh
+KYU_SWEEP_INTERVAL=200ms make run-kyu   # kyu.v1.Kyu on 127.0.0.1:50051
+```
+
+Both servers have reflection enabled, so `grpcurl` can drive them without a
+copy of the contract. Create a queue that holds a message for five seconds and
+gives it two attempts:
+
+```sh
+grpcurl -plaintext -d '{"queue":"orders","hold_duration":"5s","attempt_ceiling":2}' \
+  127.0.0.1:50051 kyu.v1.Kyu/CreateQueue
+```
+
+That created `orders` and `orders.dlq`. Enqueue something — the payload is
+bytes, so it is base64 on the wire:
+
+```sh
+grpcurl -plaintext -d '{"queue":"orders","payload":"c2hpcCBpdA=="}' \
+  127.0.0.1:50051 kyu.v1.Kyu/Enqueue
+{
+  "id": "1339816f09ff7c8abb24b42fd2168a11",
+  "position": "1"
+}
+```
+
+Take it, and then do nothing at all:
+
+```sh
+grpcurl -plaintext -d '{"queue":"orders"}' 127.0.0.1:50051 kyu.v1.Kyu/Dequeue
+{
+  "message": {
+    "id": "1339816f09ff7c8abb24b42fd2168a11",
+    "payload": "c2hpcCBpdA==",
+    "attempt": 1,
+    "leaseToken": "AQAAAAEABm9yZGVyczEzMzk4MTZmMDlmZjdjOGFiYjI0YjQyZmQyMTY4YTEx"
+  }
+}
+```
+
+Five seconds later the hold has lapsed, and the same message comes back with
+its attempt count risen. Nothing observed the hold passing: the message simply
+became eligible again.
+
+```sh
+grpcurl -plaintext -d '{"queue":"orders"}' 127.0.0.1:50051 kyu.v1.Kyu/Dequeue
+{
+  "message": {
+    "id": "1339816f09ff7c8abb24b42fd2168a11",
+    "payload": "c2hpcCBpdA==",
+    "attempt": 2,
+    "leaseToken": "AQAAAAIABm9yZGVyczEzMzk4MTZmMDlmZjdjOGFiYjI0YjQyZmQyMTY4YTEx"
+  }
+}
+```
+
+That was attempt two of two. Let this hold lapse as well, and the message is
+undeliverable from the moment it is spent — no consumer can have it, whether or
+not anything has moved it yet:
+
+```sh
+grpcurl -plaintext -d '{"queue":"orders"}' 127.0.0.1:50051 kyu.v1.Kyu/Dequeue
+{}
+```
+
+Nobody asks for anything from here on. The reaper moves it to `orders.dlq` on
+its own. How soon depends on the sweep interval and the backlog, and no timing
+is promised — so if the partition looks empty, look again. Read it at the
+storage server, since nothing in `kyu.v1.Kyu` consumes a dead letter queue yet:
+
+```sh
+grpcurl -plaintext -d '{"partition":"orders.dlq","now":"9999999999999999","attempt_floor":0,"limit":10}' \
+  127.0.0.1:50052 kyu.storage.v1.Storage/Scan
+{
+  "items": [
+    {
+      "partition": "orders.dlq",
+      "id": "1339816f09ff7c8abb24b42fd2168a11",
+      "position": "1",
+      "value": "c2hpcCBpdA==",
+      "attempts": 2
+    }
+  ]
+}
+```
+
+Same id, same payload, both attempts still recorded, and no `Delete` was issued
+for it anywhere along the way.
+
+Now the ordinary path. Enqueue another, take it, and acknowledge it with the
+lease token the delivery carried:
+
+```sh
+grpcurl -plaintext -d '{"lease_token":"AQAAAAEABm9yZGVyczY0YTE1MzQ3MTJiYjkyMDVkMzVlNGM5YzlmYjcxYjZi"}' \
+  127.0.0.1:50051 kyu.v1.Kyu/Ack
+{}
+```
+
+It is gone, and the queue is empty. Send that same acknowledgement a second
+time and the engine refuses it rather than pretending:
+
+```sh
+ERROR:
+  Code: Aborted
+  Message: message "64a1534712bb9205d35e4c9c9fb71b6b" in queue "orders" was not settled:
+           the message is no longer this consumer's to settle
+```
+
+`ABORTED` is the honest answer: nothing in the storage interface distinguishes
+this consumer's own earlier settlement from a message the reaper moved out from
+under it, so the engine does not claim to know which happened. A consumer told
+`ABORTED` should assume its work may need doing again — the queue is
+at-least-once, and that was already true of it.
+
+### Changing a contract
 
 Changing a `.proto` additionally needs [`buf`](https://buf.build); the codegen
 plugins are pinned by `go.mod` tool directives, so there is nothing else to
 install.
 
 ```sh
-make generate         # rebuild gen/ from proto/
-make generate-check   # fail if gen/ is not what regeneration produces
-make breaking         # fail if proto/ breaks the contract published on main
+make generate         # rebuild kyu/ from api/
+make generate-check   # fail if kyu/ is not what regeneration produces
+make lint-proto       # lint the contracts
+make breaking         # fail if api/ breaks the contract published on main
 ```
 
-The server has reflection enabled, so it can be driven without a copy of the
-contract:
+Container images are built per binary from `build/package/`:
 
 ```sh
-grpcurl -plaintext 127.0.0.1:50051 list kyu.v1.Kyu
-grpcurl -plaintext -d '{"queue":"orders"}' 127.0.0.1:50051 kyu.v1.Kyu/CreateQueue
+make docker-image
 ```
-
-Today that second command returns `Unimplemented`, which is the honest answer:
-the contract is registered and reachable, and nothing behind it is built.
 
 ## License
 

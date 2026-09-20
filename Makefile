@@ -1,14 +1,18 @@
 # kyu
 #
-# Building and running need Go alone: the generated code in gen/ is committed.
-# buf is needed only to change a contract in proto/.
+# Building and running need Go alone: the generated code under kyu/ is
+# committed. buf is needed only to change a contract in api/.
 
-PROTO_DIR := proto
-GEN_DIR   := gen
+API_DIR := api
+GEN_DIRS := kyu
+
+# Addresses the run targets use, overridable on the command line.
+STORAGE_ADDR ?= 127.0.0.1:50052
+ENGINE_ADDR  ?= 127.0.0.1:50051
 
 .PHONY: build
-build: ## Build every binary
-	go build ./...
+build: ## Build every binary into bin/
+	./scripts/build.sh
 
 .PHONY: test
 test: ## Run the tests
@@ -18,19 +22,32 @@ test: ## Run the tests
 vet: ## Vet the Go code
 	go vet ./...
 
-.PHONY: run-engine
-run-engine: ## Run the engine
-	go run ./cmd/kyu-engine
+.PHONY: run-memstore
+run-memstore: ## Run the reference storage server (a fixture, not a backend)
+	go run ./cmd/kyu-memstore -listen $(STORAGE_ADDR)
+
+.PHONY: run-kyu
+run-kyu: ## Run the engine against a storage server (see STORAGE_ADDR)
+	go run ./cmd/kyu -listen $(ENGINE_ADDR) -storage $(STORAGE_ADDR)
+
+.PHONY: run
+run: ## Run both servers (make -j2 run)
+	$(MAKE) -j2 run-memstore run-kyu
+
+.PHONY: docker-image
+docker-image: ## Build a container image per binary
+	docker build -t kyu -f build/package/kyu.Dockerfile .
+	docker build -t kyu-memstore -f build/package/kyu-memstore.Dockerfile .
 
 .PHONY: generate
-generate: ## Regenerate gen/ from the contracts in proto/
-	cd $(PROTO_DIR) && buf generate
+generate: ## Regenerate kyu/ from the contracts in api/
+	buf generate
 
 .PHONY: generate-check
-generate-check: generate ## Fail if gen/ is not what regeneration produces (a CI gate)
-	@if [ -n "$$(git status --porcelain -- $(GEN_DIR))" ]; then \
+generate-check: generate ## Fail if kyu/ is not what regeneration produces (a CI gate)
+	@if [ -n "$$(git status --porcelain -- $(GEN_DIRS))" ]; then \
 		echo "the committed generated code is not what regeneration produces:"; \
-		git status --porcelain -- $(GEN_DIR); \
+		git status --porcelain -- $(GEN_DIRS); \
 		echo; \
 		echo "run 'make generate' and commit the result"; \
 		exit 1; \
@@ -38,11 +55,11 @@ generate-check: generate ## Fail if gen/ is not what regeneration produces (a CI
 
 .PHONY: lint-proto
 lint-proto: ## Lint the contracts
-	cd $(PROTO_DIR) && buf lint
+	buf lint
 
 .PHONY: breaking
-breaking: ## Fail if proto/ breaks the contract published on main
-	buf breaking $(PROTO_DIR) --against '.git#branch=main,subdir=proto'
+breaking: ## Fail if api/ breaks the contract published on main
+	buf breaking --against '.git#branch=main'
 
 .PHONY: help
 help: ## List targets
