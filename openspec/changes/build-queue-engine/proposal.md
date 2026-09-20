@@ -7,11 +7,11 @@ it, behind a gRPC interface they implement themselves or take from a third
 party. Because there is one implementation of the semantics, two deployments
 on two different backends cannot disagree about what a queue does.
 
-Nothing of this exists. The repository holds a Go prototype that streams
-messages off a MongoDB tailable capped collection and marks them read the
-instant they are sent: no leases, no acknowledgement, no retry, no dead
-letters, and a storage layer welded to one database. It proves the idea is
-worth building and proves nothing else.
+Nothing of this exists. The repository held a Go prototype that streamed
+messages off a MongoDB tailable capped collection and marked them read the
+instant they were sent: no leases, no acknowledgement, no retry, no dead
+letters, and a storage layer welded to one database. It proved the idea worth
+building and proved nothing else, and has since been deleted — see Impact.
 
 The previous iteration of this project produced a careful contract, a
 conformance suite and four crates, and never ran a queue. This change is
@@ -23,7 +23,9 @@ gRPC, against a storage server the engine reaches only through the SPI.
 
 **BREAKING** — the existing `q.Q` service and the `store.Store` interface are
 replaced entirely. Nothing in `q/`, `proto/q/` or `cmd/q/` survives. The
-pub/sub service is untouched and out of scope.
+pub/sub service goes with them: it is a gRPC client of `q.Q` and its generated
+code carries `q/msg` types, so it cannot outlive the service it consumes.
+Whether kyu offers pub/sub again is a question for a later change.
 
 - **Two contracts, one root.** `spec/kyu/v1/kyu.proto` is what applications
   call. `spec/kyu/storage/v1/storage.proto` is what deployments implement.
@@ -114,11 +116,13 @@ None. `openspec/specs/` is empty.
 
 ## Impact
 
-- **Removed**: `q/`, `proto/q/`, `cmd/q/`. The MongoDB dependency leaves the
-  queue path with them.
+- **Removed**: `q/`, `proto/q/`, `cmd/q/`, and with them `pubsub/`,
+  `proto/pubsub/`, `cmd/pubsub/`, which imported them. Also `scripts/` and the
+  `Makefile`, which drove the deleted binaries. The MongoDB dependency leaves
+  with the queue path, and `go.mod` is left with no requirements at all.
 - **Added**: `spec/` as the contract root; a `buf` codegen pipeline; the
   engine, the reference storage server and their binaries.
-- **Untouched**: `pubsub/`, `proto/pubsub/`, `cmd/pubsub/`.
+- **Untouched**: `LICENSE`, `.gitignore`, and the module path.
 - **Toolchain**: Go 1.26, `buf` 1.50, `protoc` 36.1 — all already present.
 - **CI**: two new gates — `buf` breaking-change detection against the previous
   commit for `spec/`, and a codegen-drift check that fails if regeneration

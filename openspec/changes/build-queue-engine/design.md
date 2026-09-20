@@ -521,7 +521,13 @@ Nothing is deployed, so there is nothing to migrate. The MongoDB prototype in
 replaces it, and its behaviour (mark-read on send, no acknowledgement) is the
 thing being fixed.
 
-`pubsub/` is untouched and keeps building throughout.
+`pubsub/` goes with it. An earlier draft of this plan had it untouched and
+building throughout, which was simply wrong: `pubsub/pubsub.go` imports
+`kyu/q` and `kyu/q/msg`, its generated service carries `msg.Message` on the
+wire, and `pubsub/q/` is a gRPC client of `q.Q`. Nothing of it survives the
+deletion of the service it consumes, so it is deleted outright rather than
+rewritten against a contract this change has not yet defined. Pub/sub is not
+part of kyu's scope again until some later change puts it there.
 
 Order of work: contracts first, then the in-memory storage server, then the
 engine, then the reaper. The engine is not written against a mock — it is

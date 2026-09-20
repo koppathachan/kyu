@@ -1,8 +1,8 @@
 ## 1. Repository layout, and removing the prototype
 
 - [ ] 1.1 Create `spec/` as the contract root, with the directory path under it mirroring the proto package exactly, so `spec/` is the sole `--proto_path` and a package name and a file path never disagree
-- [ ] 1.2 Delete `q/`, `proto/q/` and `cmd/q/` in one commit, and drop the MongoDB driver from `go.mod`. The prototype shares no interface with what replaces it and marking messages read on send is the behaviour being fixed
-- [ ] 1.3 Confirm `pubsub/`, `proto/pubsub/` and `cmd/pubsub/` still build untouched, and that the `Makefile` targets for them still run
+- [x] 1.2 Delete `q/`, `proto/q/` and `cmd/q/` in one commit, and drop the MongoDB driver from `go.mod`. The prototype shares no interface with what replaces it and marking messages read on send is the behaviour being fixed
+- [x] 1.3 Delete `pubsub/`, `proto/pubsub/` and `cmd/pubsub/` in the same commit — pub/sub imports `q` and `q/msg` and cannot outlive them — along with `scripts/` and the `Makefile`, which drove the deleted binaries, and rewrite `README.md` from the specs so the repository describes what is being built rather than what was deleted
 - [ ] 1.4 Add `.gitignore` entries for generated code in both languages, and verify nothing generated is committed
 
 ## 2. The storage contract — `spec/kyu/storage/v1/storage.proto`
