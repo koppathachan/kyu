@@ -31,7 +31,7 @@
 ## 4. Codegen
 
 - [x] 4.1 Add `buf.yaml` and `buf.gen.yaml` rooted at `spec/`, pinning plugin versions through `go.mod` tool directives
-- [ ] 4.2 Add breaking-change detection against the previous commit for `spec/`, so a change to a published package is caught mechanically rather than by review
+- [x] 4.2 Add breaking-change detection against the previous commit for `spec/`, so a change to a published package is caught mechanically rather than by review
 - [x] 4.3 Add a `Makefile` target that regenerates and fails if the working tree changes, so a stale generation cannot be committed
 - [x] 4.4 Generate both packages and confirm the storage server interface and the client stubs compile
 
