@@ -153,8 +153,15 @@ replica after every `CreateQueue`, which nobody will do.
 
 *Cost:* one `ListPartitions` per interval per replica, and a lookup on a cache
 miss. Against the per-queue scan traffic already in the design, both round to
-nothing. A negative cache keeps a client looping on a misspelled name from
-turning every call into an enumeration.
+nothing.
+
+A negative cache keeps a client looping on a misspelled name from turning every
+call into an enumeration, and it re-introduces in miniature the bug this whole
+decision exists to fix: an absence remembered here can be contradicted by a
+creation there. So it is bounded and short — five seconds by default — and the
+staleness window is stated in the spec rather than left to whoever writes the
+cache. A longer TTL would buy nothing; the case it defends against is a tight
+retry loop, which five seconds already absorbs.
 
 ### A partition's settings are an opaque value
 
@@ -283,6 +290,7 @@ reaper learns thresholds from the call it was already making.
 | sweep ceiling | 30s | `KYU_SWEEP_INTERVAL_MAX`, engine-wide |
 | scan limit | 100 | `KYU_SCAN_LIMIT`, engine-wide |
 | discovery interval | 30s | `KYU_DISCOVERY_INTERVAL`, engine-wide |
+| negative cache TTL | 5s | `KYU_NEGATIVE_CACHE_TTL`, engine-wide |
 
 Thirty seconds of hold is a compromise: it is the recovery time after an
 engine crash, which argues shorter, and the budget a slow consumer gets

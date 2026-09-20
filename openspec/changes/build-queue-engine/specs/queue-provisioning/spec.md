@@ -61,11 +61,15 @@ The reaper needs a queue's attempt ceiling to decide what to move, and must keep
 - **THEN** the backend stores and returns it unchanged, and no field of the SPI names a hold duration or an attempt ceiling
 
 ### Requirement: [ENGINE] A queue this engine has not yet seen is looked up, not refused
-When a client names a queue this engine holds no settings for, the engine SHALL call `ListPartitions` before answering. If the queue is present, the engine SHALL adopt its settings, start a sweep for it, and serve the call. If it is absent, the engine SHALL fail the call with `NOT_FOUND`.
+When a client names a queue this engine holds no settings for, the engine SHALL call `ListPartitions` before answering.
+
+If the queue is present and this engine can decode its settings, the engine SHALL adopt them, start a sweep for it, and serve the call. If it is present and its settings cannot be decoded, the requirement below governs and the queue SHALL NOT be served — discovery finds a queue, it does not exempt one. If it is absent, the engine SHALL fail the call with `NOT_FOUND`.
 
 The engine SHALL NOT infer a queue's absence from its own memory. Queues are created on whichever replica a client happened to reach, so a queue created a moment ago on another replica is real, is durable, and is simply not yet known here.
 
-The engine MAY remember that a name was absent, for long enough to keep a client looping on a misspelled queue from issuing one `ListPartitions` per call.
+The engine MAY remember that a name was absent, to keep a client looping on a misspelled queue from issuing one `ListPartitions` per call. Such an entry SHALL expire after a bounded, configurable interval, and that interval SHALL be short.
+
+An absence MAY therefore be served stale for at most that interval: a queue created on another replica just after this one answered `NOT_FOUND` for it stays absent here until the entry expires. That is the same failure this requirement exists to prevent, re-introduced in miniature, which is why the interval is bounded, short and stated rather than left to an implementation.
 
 #### Scenario: A queue created on another replica is served
 - **WHEN** a client enqueues to a queue created through a different engine instance since this one started
@@ -74,6 +78,14 @@ The engine MAY remember that a name was absent, for long enough to keep a client
 #### Scenario: A queue that does not exist is still refused
 - **WHEN** a client names a queue absent from `ListPartitions`
 - **THEN** the call fails with `NOT_FOUND`
+
+#### Scenario: Discovery does not override an unreadable queue
+- **WHEN** discovery finds a queue whose settings this engine cannot decode
+- **THEN** the call fails with `FAILED_PRECONDITION`, no sweep is started for it, and it is reported by name
+
+#### Scenario: A remembered absence does not outlive its interval
+- **WHEN** a client is told a queue is absent, the queue is then created through another engine instance, and the client retries after the negative-cache interval
+- **THEN** the queue is discovered and the call is served
 
 ### Requirement: [ENGINE] A queue whose settings the engine cannot read is not served
 When `ListPartitions` returns a settings value this engine cannot decode, the engine SHALL NOT serve that queue: it SHALL NOT claim from it, SHALL NOT sweep it, and SHALL fail client calls naming it with `FAILED_PRECONDITION`. It SHALL report the queue by name, and SHALL continue serving every queue it can read.

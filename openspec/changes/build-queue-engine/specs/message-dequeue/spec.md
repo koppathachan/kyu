@@ -3,15 +3,21 @@
 ### Requirement: [ENGINE] A message leaves a queue only when it is acknowledged
 The engine SHALL call `Delete` for a message when, and only when, a consumer acknowledges it. No other event SHALL cause a message to be deleted.
 
-Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` refused with `FAILED_PRECONDITION` means the message's hold lapsed and it has passed to another consumer; it is no longer this consumer's to settle.
+Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` may be refused in either of two ways, and both mean the same thing to the consumer: the message is no longer its to settle. `FAILED_PRECONDITION` means the hold lapsed and the message passed to another consumer. `NOT_FOUND` means the hold lapsed, the message had already spent its attempts, and the reaper moved it to the dead letter partition.
 
-The refusal is ordinary for the engine and SHALL NOT be reported as a fault, but it SHALL be reported to the consumer, which asked for something that did not happen. `Ack` SHALL fail with `ABORTED`. On a stream, the engine SHALL send a settlement rejection naming the message. Telling the consumer `OK` would tell it that it had settled a message another consumer is at that moment still processing.
+Both refusals are ordinary for the engine and SHALL NOT be reported as faults. Both SHALL be reported to the consumer, which asked for something that did not happen. `Ack` SHALL fail with `ABORTED`. On a stream, the engine SHALL send a settlement rejection naming the message. Telling the consumer `OK` would tell it that it had settled a message another consumer is at that moment still processing, or that it had settled one sitting in a dead letter queue.
+
+The second case is the one recorded under Risks in `design.md`: a consumer slow rather than dead can have its message transferred while it works, and no fence closes that. The engine cannot keep the work; it can refuse to pretend the work landed.
 
 `ABORTED` and not `FAILED_PRECONDITION`: this is a concurrency conflict, and `FAILED_PRECONDITION` is the status a client receives for a queue whose settings this engine cannot read — an unrelated condition calling for an unrelated response.
 
 #### Scenario: A consumer is told when it lost the message
 - **WHEN** a consumer acknowledges a message whose hold lapsed and which another consumer now holds
 - **THEN** `Ack` fails with `ABORTED`, or on a stream a settlement rejection naming that message is sent
+
+#### Scenario: A consumer is told when its message was dead lettered under it
+- **WHEN** a consumer acknowledges a message the reaper moved to the dead letter partition while it was still working
+- **THEN** the `Delete` returns `NOT_FOUND`, and the consumer is told `ABORTED` rather than `OK`
 
 #### Scenario: An unacknowledged message is not deleted
 - **WHEN** a consumer receives a message and never acknowledges it
@@ -52,6 +58,8 @@ The in-flight limit SHALL be at least one and SHALL default to one.
 ### Requirement: [ENGINE] The engine never exceeds a consumer's in-flight limit
 The engine SHALL hold at most the agreed number of unacknowledged messages out to one stream at a time. It SHALL send a further message only when an acknowledgement reduces the number outstanding below the limit.
 
+An acknowledgement frees the slot it occupied whether its settlement succeeded or was refused. A refused settlement means the message is no longer this stream's — it went to another consumer or to a dead letter partition — so holding the slot against it would leave a consumer whose holds had all lapsed acknowledging everything, collecting a rejection for each, and then sitting at its limit receiving nothing on a stream that is still open.
+
 Every message sent is a message claimed. Without this limit, one slow consumer attached to a deep queue would claim the entire queue and hold it, and every other consumer would see an empty queue while thousands of messages waited.
 
 #### Scenario: A consumer that never acknowledges receives its limit and no more
@@ -61,6 +69,10 @@ Every message sent is a message claimed. Without this limit, one slow consumer a
 #### Scenario: An acknowledgement admits one more message
 - **WHEN** a consumer at its limit acknowledges one message
 - **THEN** exactly one further message is sent
+
+#### Scenario: A rejected settlement frees its slot
+- **WHEN** a consumer at its limit acknowledges a message whose hold had lapsed, and the settlement is refused
+- **THEN** a settlement rejection is sent and one further message follows
 
 ### Requirement: [ENGINE] Acknowledgements may arrive in any order
 Each acknowledgement SHALL name the message it settles. The engine SHALL NOT require acknowledgements in the order messages were sent, and SHALL NOT treat an acknowledgement of a later message as settling an earlier one.
