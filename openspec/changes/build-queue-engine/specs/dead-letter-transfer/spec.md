@@ -20,7 +20,7 @@ Preserving the count is deliberate: it is the record of how hard the queue tried
 
 This is what allows the reaper to be an optimisation rather than a load-bearing component: a message awaiting transfer is already undeliverable, so a delayed transfer delays only its arrival in the dead letter partition, never its correctness.
 
-It also removes the race that would otherwise exist between the reaper and a consumer. A message eligible for transfer is claimable by nobody, so the reaper can move it without contending with a consumer that might be processing it.
+It does not remove every race. A message reaches the ceiling by being claimed, and that claim handed it to a consumer under a hold; the reaper moves it once that hold lapses. A consumer that is slow rather than dead can therefore have its message moved while it is still working, and its acknowledgement will then be refused. See the risk recorded in `design.md`; it is the same at-least-once seam that redelivery opens, and it is not closed here.
 
 #### Scenario: A consumer cannot claim a message awaiting transfer
 - **WHEN** a message has reached the attempt ceiling and has not yet been moved

@@ -49,10 +49,19 @@ pub/sub service is untouched and out of scope.
 
 - **Settling a message names the hold it settles.** `Delete` and `Release` both
   require the caller to state the attempt count it expects, and storage refuses
-  the call if the item's count has moved on. Without it, a consumer that is
-  slow rather than dead destroys a message another consumer has since claimed
-  and is working on — and the engine cannot prevent that from memory, because
-  the two may be attached to different engine instances.
+  the call if the item's count has moved on. Without it a slow consumer
+  destroys work another consumer is doing; `specs/storage-spi` carries the
+  case.
+
+- **Per-queue policy is durable and opaque.** A partition carries a settings
+  value storage stores and returns without reading, so the reaper can recover
+  hold duration and attempt ceiling after a restart while no field of the SPI
+  names a queue concept.
+
+- **SPI failures are attributable.** Every failure the engine reports that came
+  from storage names the operation, the partition and the backend's own status,
+  because the backend is written by the deployment and the first question when
+  something breaks is which side it broke on.
 
 - **Every queue is created with a companion.** Creating `orders` creates
   `orders.dlq`. Client-supplied names ending in `.dlq` are refused.
@@ -111,5 +120,8 @@ None. `openspec/specs/` is empty.
   engine, the reference storage server and their binaries.
 - **Untouched**: `pubsub/`, `proto/pubsub/`, `cmd/pubsub/`.
 - **Toolchain**: Go 1.26, `buf` 1.50, `protoc` 36.1 — all already present.
+- **CI**: two new gates — `buf` breaking-change detection against the previous
+  commit for `spec/`, and a codegen-drift check that fails if regeneration
+  changes the working tree.
 - **Anyone deploying kyu** must now run a storage server or write one. There
   is no embedded default.

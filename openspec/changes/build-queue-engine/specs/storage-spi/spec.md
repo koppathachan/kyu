@@ -31,6 +31,8 @@ The SPI SHALL define the method set below and no others.
 
 An item SHALL carry a partition, an id, a position, an opaque value, a hold instant and an attempt count, and no other field.
 
+A partition SHALL carry a name and an opaque settings value, and no other field. Storage SHALL store the settings value and return it unchanged, and SHALL NOT interpret, validate or act on its contents. Whatever policy the engine keeps there is unreadable to storage, which is what allows per-queue policy to be durable without any field of the SPI naming a queue concept.
+
 #### Scenario: The SPI exposes the defined method set
 - **WHEN** the service definition is inspected
 - **THEN** it declares exactly these eight methods and no others
@@ -139,6 +141,21 @@ One clock in the system means two components cannot disagree about whether a hol
 - **WHEN** every response message in the SPI is inspected
 - **THEN** none of them carries a timestamp field
 
+### Requirement: [STORAGE] `Put` takes the caller's id, and refuses a partition that does not exist
+`Put` SHALL take the item's id from the caller. Storage SHALL NOT generate one.
+
+A `Put` naming an id already present in that partition SHALL fail with `ALREADY_EXISTS` and SHALL NOT modify the item already there. A `Put` naming a partition that does not exist SHALL fail with `NOT_FOUND` and SHALL NOT create it.
+
+Creating partitions implicitly would turn a misspelled queue name into a silently empty queue, which is the failure `CreateQueue` is strict in order to prevent.
+
+#### Scenario: A duplicate id is refused
+- **WHEN** `Put` names an id already present in that partition
+- **THEN** it fails with `ALREADY_EXISTS` and the existing item is unchanged
+
+#### Scenario: An unknown partition is not created
+- **WHEN** `Put` names a partition that does not exist
+- **THEN** it fails with `NOT_FOUND` and no partition is created
+
 ### Requirement: [STORAGE] Storage assigns positions, and positions never go backwards
 `Put` SHALL assign the item a position, and SHALL return it. Within one partition, positions SHALL be totally ordered, and SHALL increase with the order in which `Put` calls complete: an item whose `Put` completed before another's began SHALL have the lower position.
 
@@ -150,12 +167,24 @@ This is the requirement most easily violated by accident and most difficult to o
 - **WHEN** two `Put` calls complete one after the other in one partition
 - **THEN** the second item's position is greater than the first's
 
-#### Scenario: The engine notices a backend that violates this
-- **WHEN** `Claim` returns an item whose position is lower than one already claimed from that partition
-- **THEN** the engine reports the violation naming the backend and the partition, and stops serving that queue
+Detection belongs at `Put`, where the invariant is stated, and SHALL compare a returned position only against positions whose calls had already completed when this one was issued — the requirement constrains non-overlapping calls, so concurrent enqueues may legitimately complete in either order.
+
+A check at `Claim` would be wrong. A claimed position lower than one claimed before it is ordinary and required: a redelivered message keeps its position and is claimed ahead of newer work, so such a check fires on every redelivery.
+
+#### Scenario: The engine detects a backend that violates this
+- **WHEN** a `Put` returns a position lower than one returned by a `Put` to the same partition that had already completed before this one was issued
+- **THEN** the engine reports the violation, naming the backend, the partition and both positions
+
+#### Scenario: Redelivery is not mistaken for a violation
+- **WHEN** a message's hold lapses and it is claimed again at a position lower than messages claimed since
+- **THEN** no violation is reported and the queue continues to be served
+
+#### Scenario: Concurrent enqueues are not mistaken for a violation
+- **WHEN** two `Put` calls to one partition overlap and complete in the opposite order to their positions
+- **THEN** no violation is reported
 
 ### Requirement: [STORAGE] `Scan` reads without holding
-`Scan` SHALL take a partition, an instant, an attempt floor and a limit, and SHALL return up to `limit` items of lowest position whose hold instant is at or before the instant given and whose attempt count is at or above the floor.
+`Scan` SHALL take a partition, an instant, an attempt floor and a limit, and SHALL return up to `limit` items of lowest position whose hold instant is absent or at or before the instant given and whose attempt count is at or above the floor.
 
 `Scan` SHALL NOT modify any item: it SHALL NOT set a hold instant and SHALL NOT increment an attempt count.
 

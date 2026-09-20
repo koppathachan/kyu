@@ -9,10 +9,11 @@
 
 - [ ] 2.1 Declare `package kyu.storage.v1` and the `Storage` service with exactly the eight methods, and no more
 - [ ] 2.2 Define `Item` with exactly `partition`, `id`, `position`, `value`, `hold_until` and `attempts`
+- [ ] 2.2a Define a partition as a name plus an opaque settings value, with a comment saying storage stores and returns it unread — this is what lets queue policy be durable without any SPI field naming a queue concept
 - [ ] 2.3 Define `CreatePartition` and `ListPartitions`, with partition settings carried on both so the reaper can read back what creation recorded
-- [ ] 2.4 Define `Put`, returning the position storage assigned
+- [ ] 2.4 Define `Put` taking the caller's id and returning the position storage assigned, with `ALREADY_EXISTS` on a duplicate id and `NOT_FOUND` on a partition that does not exist — no implicit partition creation
 - [ ] 2.5 Define `Claim` taking partition, `now`, `hold_until` and attempt ceiling, and returning an optional item — with the indivisibility of select-hold-increment stated in the comment as a requirement on the implementation, not a hint
-- [ ] 2.6 Define `Release`, `Delete` and `Move`. `Release` and `Delete` take a required expected attempt count; `Move` does not, and the comment should say why — the sweep only moves messages at the ceiling, which `Claim` will not return, so no consumer can hold one. State `Move`'s all-or-nothing requirement in its comment
+- [ ] 2.6 Define `Release`, `Delete` and `Move`. `Release` and `Delete` take a required expected attempt count. `Move` takes none — not because the message is safe, but because no fence helps: attempts do not change while a message is held, so the reaper cannot distinguish a lapsed hold from a consumer still working under one. State `Move`'s all-or-nothing requirement in its comment, and do not claim in it that the transfer is race-free
 - [ ] 2.7 Define `Scan` taking partition, instant, attempt floor and limit, and returning items — with a comment saying plainly that it is called on a timer for every partition and will usually return nothing, so an implementer knows what they are optimising for
 - [ ] 2.8 Write the normative comments. With no conformance program in this change, the proto is the whole of what a customer receives: every atomicity, ordering and clock requirement in `specs/storage-spi` must be stated in the file itself
 - [ ] 2.9 Verify against `specs/storage-spi` that no identifier anywhere in the file names a queue, message, lease, delivery, acknowledgement or dead letter
@@ -24,7 +25,7 @@
 - [ ] 3.2 Define `CreateQueue` carrying hold duration and attempt ceiling, both optional and defaulted
 - [ ] 3.3 Define `Enqueue` returning the message id and the position
 - [ ] 3.4 Define `Dequeue` returning an optional message and a lease token, and `Ack` taking that token
-- [ ] 3.5 Define `StreamingDequeue` with the client stream as a `oneof` of `Open` and `Ack`, and the server stream as messages
+- [ ] 3.5 Define `StreamingDequeue` with the client stream as a `oneof` of `Open` and `Ack`, and the server stream as messages. `Open` carries the queue and the in-flight limit and nothing else — hold duration is the queue's setting, deliberately not per-call, so the two dequeue forms cannot diverge
 - [ ] 3.6 Confirm this file imports nothing from `kyu.storage.v1`. The two contracts are independent; sharing a type would make an engine-side change a storage-side breaking change
 
 ## 4. Codegen
@@ -48,10 +49,11 @@
 ## 6. Engine — provisioning and enqueue
 
 - [ ] 6.1 Build the engine's storage client: a thin wrapper over the generated stubs holding the connection and nothing else, with no backend-specific behaviour anywhere in it
-- [ ] 6.2 Implement `CreateQueue` issuing two `CreatePartition` calls, failing the whole call if the companion cannot be created
+- [ ] 6.2 Implement `CreateQueue` issuing two `CreatePartition` calls with the same settings value, failing the whole call if the companion cannot be created
+- [ ] 6.2a Implement the settings codec: encode hold duration and attempt ceiling into the opaque value on the way out, decode on the way back from `ListPartitions`, and reject a value this engine cannot decode rather than falling back to defaults
 - [ ] 6.3 Enforce the reserved `.dlq` suffix on every client-supplied queue name, in `CreateQueue` and `Enqueue`
 - [ ] 6.4 Implement `Enqueue`, assigning the message id engine-side and returning storage's position
-- [ ] 6.5 Add the position-monotonicity check: track the last position claimed per partition and refuse to serve a queue whose backend hands back a lower one, naming the backend and partition
+- [ ] 6.5 Add the position-monotonicity check at `Put`, not at `Claim`: record the highest position already completed for that partition when a `Put` is issued, and report a violation if the response comes back lower, naming the backend, the partition and both positions. Report and continue serving — taking a queue out of service converts an ordering fault we cannot fix into an outage we caused. A check at `Claim` would be wrong: redelivery legitimately returns a lower position than messages claimed since, so it would fire on every retry, including in task 11.1
 - [ ] 6.6 Tests: both partitions created; reserved names refused; `ALREADY_EXISTS` on a repeat; settings read back through `ListPartitions` after a restart
 
 ## 7. Engine — lease and unary dequeue
@@ -59,7 +61,7 @@
 - [ ] 7.1 Implement `Dequeue` as a single `Claim` with the queue's ceiling, returning an empty result when nothing is eligible
 - [ ] 7.2 Implement the lease token: partition, message id and the attempt count the claim returned — opaque to the client and useless for anything but `Ack`. The attempt count travels in the token rather than in engine memory, which is what makes an acknowledgement safe across a restart and across engine instances
 - [ ] 7.3 Implement `Ack` as a `Delete` fenced on the token's attempt count, treating `FAILED_PRECONDITION` as an ordinary outcome without retrying. Confirm no other path in the engine issues a `Delete`
-- [ ] 7.4 Implement hold duration resolution — per-dequeue override, else the queue's setting, else the default — computed against the engine's clock and passed as `hold_until`
+- [ ] 7.4 Implement hold duration resolution — the queue's setting, else the default — computed against the engine's clock and passed as `hold_until`. There is no per-dequeue override; adding one to the unary form only would break the identical-forms rule
 - [ ] 7.5 Tests: a held message is invisible to a second consumer; it reappears after its hold; attempts increment once per claim and survive an engine restart; an unacknowledged message is never deleted
 - [ ] 7.6 Test the slow-consumer case end to end: A claims, A's hold lapses, B claims, A then acknowledges — assert A's delete is refused, the message is still present, and B's hold stands. Run it again with the engine restarted between A's claim and A's acknowledgement, which is the case engine memory cannot cover
 
@@ -76,7 +78,7 @@
 
 - [ ] 9.1 Pass the queue's attempt ceiling on every `Claim`, so a message at the ceiling is undeliverable before any transfer occurs — this is what removes the reaper from the correctness path and the race between the reaper and a consumer
 - [ ] 9.2 Implement the transfer: `Move` to `<queue>.dlq`, preserving id, payload and attempt count, issuing no `Delete`
-- [ ] 9.3 Implement the per-queue sweep: `Scan` for lapsed holds with attempts at or above the ceiling, `Move` each result
+- [ ] 9.3 Implement the per-queue sweep: `Scan` for lapsed holds with attempts at or above the ceiling, with an explicit limit defaulting to 100, and `Move` each result. Never send `Scan` without a limit — the backend would be choosing the reaper's throughput
 - [ ] 9.4 Start a sweep at `CreateQueue`, and at startup for every partition from `ListPartitions`; start none for a partition ending in `.dlq`
 - [ ] 9.5 Implement jitter on the initial offset and exponential backoff between the configured floor and ceiling, resetting to the floor on any non-empty scan
 - [ ] 9.6 Read `KYU_SWEEP_INTERVAL` and `KYU_SWEEP_INTERVAL_MAX`, with flag overrides
@@ -87,10 +89,9 @@
 
 - [ ] 10.1 Implement the status table from `specs/error-model` across both services, and confirm no call returns a status for an outcome the table does not name it for
 - [ ] 10.2 Confirm every empty result — `Claim`, `Scan`, `Dequeue` — returns `OK`, and that no path returns `NOT_FOUND` for emptiness
-- [ ] 10.3 Surface `UNAVAILABLE` and `INTERNAL` to the caller without retrying
+- [ ] 10.3 Surface `UNAVAILABLE` and `INTERNAL` to the caller without retrying, and keep transport statuses — `CANCELLED`, `DEADLINE_EXCEEDED` — out of the outcome table and out of fault reporting
 - [ ] 10.4 Include the operation, the partition and the backend's own status in every SPI-originated failure the engine reports
-- [ ] 10.5 Tests: an unreachable backend produces one reported failure and no retry; a status is never reused for an outcome outside the table
-- [ ] 10.6 Confirm `FAILED_PRECONDITION` from a fenced `Delete` or `Release` is neither retried nor reported as a failure, and is distinguishable in logs from a backend fault
+- [ ] 10.5 Tests: an unreachable backend produces one reported failure and no retry; a status named in the table is never reused for an outcome it does not name; a cancelled stream is not reported as a fault. The handling of `FAILED_PRECONDITION` and of `NOT_FOUND` from `Move` is tested where it is implemented, in 7.6, 8.5 and 9.8 — do not re-test it here
 
 ## 11. Demonstrating it
 

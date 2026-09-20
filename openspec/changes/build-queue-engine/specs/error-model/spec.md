@@ -29,11 +29,17 @@ The following statuses SHALL be used with these meanings and no others.
 | `UNAVAILABLE` | The backend could not be reached or could not serve the call |
 | `INTERNAL` | The backend failed in a way it does not attribute to the request |
 
-A status SHALL NOT be used for an outcome it does not name above.
+A status named in the table SHALL NOT be used for an outcome the table does not name it for.
+
+Statuses gRPC itself produces for the transport rather than for an outcome — `CANCELLED`, `DEADLINE_EXCEEDED` and the like — are outside this table. They SHALL NOT be reused for any outcome the table names. A stream ending in `CANCELLED` is ordinary and SHALL NOT be reported as a fault.
 
 #### Scenario: A reserved name is an argument error, not a conflict
 - **WHEN** a queue name ending in `.dlq` is supplied by a client
 - **THEN** the call fails with `INVALID_ARGUMENT`
+
+#### Scenario: A cancelled stream is not a fault
+- **WHEN** a consumer cancels its `StreamingDequeue` stream
+- **THEN** the stream ends with `CANCELLED`, its held messages are released, and nothing is reported as a failure
 
 ### Requirement: [ENGINE] The engine distinguishes a broken backend from an ordinary outcome
 On `UNAVAILABLE` or `INTERNAL` from the SPI, the engine SHALL surface the failure to its caller and SHALL NOT retry the call. On `NOT_FOUND` from `Move` or `Delete`, and on `FAILED_PRECONDITION` from `Delete` or `Release`, for a message that has already been settled, moved or reclaimed by another consumer, the engine SHALL treat the outcome as ordinary and continue. It SHALL NOT retry such a call, because the condition that refused it will not change.

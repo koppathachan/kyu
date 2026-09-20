@@ -110,15 +110,10 @@ anyway.
 `Delete` and `Release` both require the caller to state the attempt count it
 expects, and storage refuses the call if the item's count differs.
 
-Without a fence, a settlement carries no evidence of which hold it belongs to.
-A consumer that is slow rather than dead — one whose hold lapsed while it was
-still working — deletes a message another consumer has since claimed and is
-processing. The engine cannot prevent this from its own memory: the two
-consumers may be attached to different engine instances, or to one that has
-restarted since it granted the hold. Fencing is the only place the check can
-live.
+`specs/storage-spi` states the requirement and why it exists. The decision
+here is what the fence is made of.
 
-The fence is the attempt count rather than a token, because `Claim` already
+It is the attempt count rather than a token, because `Claim` already
 increments it in the same indivisible step that grants the hold. It rises by
 exactly one per hold and never repeats, so it names a hold exactly, and
 storage has nothing new to generate or store.
@@ -134,6 +129,21 @@ unique value. The attempt count is already there and already unique per hold.
 *Not applied to `Move`:* the sweep moves only messages at the attempt ceiling,
 which `Claim` refuses to return, so no consumer can be holding one. Two sweeps
 racing resolve through `NOT_FOUND`.
+
+### A partition's settings are an opaque value
+
+Per-queue policy — hold duration, attempt ceiling — has to be durable, because
+the reaper needs it and must survive a restart. It also cannot appear in the
+SPI, because no field there may name a queue concept.
+
+Both hold if storage carries a partition's settings as bytes it stores and
+returns without reading. The engine encodes its policy into that value and
+decodes it on the way back; storage still has no idea one of its partitions is
+a queue.
+
+*Alternative considered:* named fields on `CreatePartition` for hold duration
+and attempt ceiling. Simpler to read, and it breaks the vocabulary rule
+outright — a backend author would be implementing a lease again.
 
 ### `Get` is not in the SPI
 
@@ -277,6 +287,18 @@ on failure → The price of not letting storage implement the queue. A fatter
 SPI would cut a round trip and would mean each backend reimplementing the
 semantics, which is the thing kyu exists to prevent.
 
+**The reaper can move a message out from under a slow consumer** → A message
+reaches the ceiling by being claimed, under a hold, by a live consumer. The
+reaper moves it once that hold lapses, which is exactly the "slow rather than
+dead" case the settlement fence exists for. That consumer's acknowledgement is
+then refused, and a message it processed successfully sits in `.dlq` with
+nothing recording that it succeeded. Fencing `Move` on the attempt count does
+not help — attempts do not move while a message is held — and refusing a
+`Move` against a live hold would only narrow the window between `Scan` and
+`Move`, not close it. Closing it needs hold renewal, which this change does not
+have. Recorded rather than mitigated: it is the same at-least-once seam as
+redelivery, and a partial mitigation here would read as a guarantee.
+
 **A message can be delivered twice.** A consumer that finishes work and dies
 before acknowledging will have its message redelivered. At-least-once, stated
 plainly; exactly-once is not offered and deduplication is out of scope. Fencing
@@ -302,13 +324,22 @@ that the SPI is exercised as a wire contract rather than a Go interface.
 1. **Are the defaults right?** Hold duration and attempt ceiling in
    particular are guesses that feel reasonable and have no evidence behind
    them.
-2. **Should `CreateQueue` be idempotent** — returning success for a queue that
-   already exists with identical settings — or always `ALREADY_EXISTS`?
-   Idempotent creation is friendlier to declarative deployment; strict
-   creation catches typos. Currently specified as strict.
-3. **What does `Scan`'s `limit` default to when unset?** Zero meaning
-   "implementation's choice" leaves the reaper's throughput to the backend.
-4. **Does the engine need a `Ping` or health call on the SPI** to fail fast at
-   startup against a storage server that is absent or serving a different
-   package? A first real call fails with `UNIMPLEMENTED` anyway, which may be
-   enough.
+2. **Should a queue's settings be versioned inside the opaque value?** They
+   are bytes the engine writes and reads back, so a later engine will meet
+   values an earlier one wrote. A version byte costs nothing now and cannot be
+   added retroactively.
+
+Two questions carried here earlier are closed, and are recorded as decisions
+rather than left open:
+
+- *`CreateQueue` idempotency* — decided strict. `specs/queue-provisioning`
+  specifies `ALREADY_EXISTS`, on the grounds that strict creation catches a
+  misspelled name at the moment it is made rather than silently serving an
+  empty queue nobody writes to.
+- *An SPI health call* — decided against. `specs/storage-spi` says no
+  handshake is needed and none is to be added; a first real call against a
+  backend serving another package fails with `UNIMPLEMENTED`, which is the
+  fail-fast that a ping would have provided.
+- *`Scan`'s limit* — decided. The engine always supplies an explicit limit,
+  defaulting to 100 and configurable; storage is never asked to choose a page
+  size, so the reaper's throughput does not vary with the backend.

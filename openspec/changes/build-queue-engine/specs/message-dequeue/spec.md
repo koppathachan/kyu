@@ -5,8 +5,6 @@ The engine SHALL call `Delete` for a message when, and only when, a consumer ack
 
 Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` refused with `FAILED_PRECONDITION` means the message's hold lapsed and it has passed to another consumer; it is no longer this consumer's to settle, and the engine SHALL treat the refusal as an ordinary outcome.
 
-This holds in every queue, including dead letter partitions. A message in a dead letter queue that is consumed and acknowledged is deleted exactly as one in the queue it came from.
-
 #### Scenario: An unacknowledged message is not deleted
 - **WHEN** a consumer receives a message and never acknowledges it
 - **THEN** the message still exists, and is delivered again after its hold lapses
@@ -85,7 +83,3 @@ Released messages keep the attempts they have already consumed. A consumer that 
 #### Scenario: Work already done is not lost
 - **WHEN** a consumer acknowledges two of four messages and then disconnects
 - **THEN** the two acknowledged are deleted and the two unacknowledged are released
-
-#### Scenario: A release for a hold that already lapsed is refused
-- **WHEN** a stream breaks holding a message whose hold had already lapsed and been claimed elsewhere
-- **THEN** the release is refused and the other consumer keeps the message
