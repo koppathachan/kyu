@@ -1,0 +1,188 @@
+// Copyright (c) 2021 Akhil Sasidharan. MIT licensed.
+
+syntax = "proto3";
+
+// Package kyu.v1 is the contract applications call.
+//
+// It is independent of kyu.storage.v1 and imports nothing from it. The two
+// contracts move for different reasons: this one changes when what a queue
+// offers changes, that one when what durability requires changes, and a type
+// shared between them would turn either change into a breaking change for the
+// other side.
+//
+// The package name is the version of this contract, as it is there.
+package kyu.v1;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/sasidakh/kyu/gen/kyu/v1;kyuv1";
+
+// Kyu is a message queue that runs on storage kyu does not implement.
+//
+// Delivery is at-least-once. A consumer that finishes its work and dies before
+// acknowledging will see its message again; exactly-once is not offered.
+service Kyu {
+  // CreateQueue creates a queue and its dead letter companion.
+  //
+  // Creating "orders" also creates "orders.dlq". A name ending in ".dlq" is
+  // refused with INVALID_ARGUMENT, so the companion's name can never collide
+  // with a queue someone asked for.
+  //
+  // Creating a queue that already exists fails with ALREADY_EXISTS. Creation
+  // is strict on purpose: a misspelled name is caught when it is made, rather
+  // than silently serving an empty queue nobody writes to.
+  rpc CreateQueue(CreateQueueRequest) returns (CreateQueueResponse);
+
+  // Enqueue appends one message to a queue and reports where it landed.
+  rpc Enqueue(EnqueueRequest) returns (EnqueueResponse);
+
+  // Dequeue returns at most one message, held for the queue's hold duration.
+  //
+  // An empty queue is a success carrying no message, never an error.
+  //
+  // The message carries a lease token. Acknowledge it with Ack, or do nothing
+  // and let the hold lapse, after which the message is delivered again.
+  rpc Dequeue(DequeueRequest) returns (DequeueResponse);
+
+  // StreamingDequeue delivers messages continuously over one stream.
+  //
+  // The consumer's first message is an Open naming the queue and how many
+  // unacknowledged messages it will hold at once; every message after that is
+  // an Ack. A stream whose first message is not an Open, or that sends a
+  // second Open, is terminated with INVALID_ARGUMENT.
+  //
+  // The engine holds at most the agreed number out at a time, and sends one
+  // more for each acknowledgement it receives. Acknowledgements may arrive in
+  // any order.
+  //
+  // When the stream ends — cleanly, by error, or by the consumer vanishing —
+  // every message it held and had not acknowledged is released at once, rather
+  // than waiting out its hold.
+  //
+  // Its semantics are identical to Dequeue and Ack in every respect. Where
+  // Ack would fail with ABORTED, this stream carries a SettlementRejection
+  // naming the message instead.
+  rpc StreamingDequeue(stream StreamingDequeueRequest) returns (stream StreamingDequeueResponse);
+
+  // Ack settles a message and removes it from its queue. Acknowledgement is
+  // the only thing that deletes a message.
+  //
+  // Fails with ABORTED when the message is no longer this consumer's to
+  // settle: its hold lapsed and it passed to another consumer, or it spent its
+  // last attempt and was moved to the queue's dead letter queue, or it has
+  // already been settled. These are not distinguishable from one another, and
+  // a consumer told ABORTED should assume its work may need doing again — the
+  // queue is at-least-once, and that is already true of it.
+  //
+  // Not FAILED_PRECONDITION, which a client receives for a queue whose
+  // settings this engine cannot read, and not OK, which would tell a consumer
+  // it had settled a message another consumer is at that moment processing.
+  rpc Ack(AckRequest) returns (AckResponse);
+}
+
+// Message is one delivery of one message.
+message Message {
+  // id identifies the message within its queue.
+  string id = 1;
+
+  // payload is what was enqueued. kyu does not read it.
+  bytes payload = 2;
+
+  // attempt is the number of times this message has been handed out,
+  // including this delivery. It starts at one.
+  uint32 attempt = 3;
+
+  // lease_token names the hold this delivery granted. It is opaque to the
+  // consumer, useful for nothing but acknowledging this delivery, and carries
+  // everything an Ack needs — so an acknowledgement stays safe across an
+  // engine restart and across engine instances.
+  bytes lease_token = 4;
+}
+
+message CreateQueueRequest {
+  // queue is the name to create. A name ending in ".dlq" is refused.
+  string queue = 1;
+
+  // hold_duration is how long a message is held once delivered. Defaults to
+  // 30s. It is a property of the queue, deliberately not of a dequeue: the two
+  // dequeue forms are required to observe identical semantics, and a per-call
+  // override would exist on one of them only.
+  optional google.protobuf.Duration hold_duration = 2;
+
+  // attempt_ceiling is how many deliveries a message gets before it is moved
+  // to the dead letter queue. Defaults to 5.
+  optional uint32 attempt_ceiling = 3;
+}
+
+message CreateQueueResponse {}
+
+message EnqueueRequest {
+  string queue = 1;
+  bytes payload = 2;
+}
+
+message EnqueueResponse {
+  // id assigned to the message.
+  string id = 1;
+
+  // position it was given in the queue. Messages are delivered in the order
+  // storage assigned positions in.
+  int64 position = 2;
+}
+
+message DequeueRequest {
+  string queue = 1;
+}
+
+message DequeueResponse {
+  // message is absent when nothing was available, which is a success.
+  optional Message message = 1;
+}
+
+message AckRequest {
+  // lease_token from the delivery being settled.
+  bytes lease_token = 1;
+}
+
+message AckResponse {}
+
+// Open is the first thing a consumer sends on a StreamingDequeue stream.
+message Open {
+  string queue = 1;
+
+  // in_flight is how many unacknowledged messages this consumer will hold at
+  // once. At least one; defaults to one.
+  //
+  // The limit is not optional, because every message sent is a message
+  // claimed: without it one slow consumer attached to a deep queue would claim
+  // the whole queue, and every other consumer would see an empty one.
+  uint32 in_flight = 2;
+}
+
+// Ack settles one message on a StreamingDequeue stream. An Ack naming a
+// message this consumer does not hold is ignored, and does not end the stream.
+message Ack {
+  bytes lease_token = 1;
+}
+
+// SettlementRejection says an acknowledgement did not settle anything. It is
+// the streaming form of Ack's ABORTED, and means the same thing: the message
+// is no longer this consumer's to settle. It frees the in-flight slot the
+// message occupied, exactly as a successful settlement would.
+message SettlementRejection {
+  string message_id = 1;
+}
+
+message StreamingDequeueRequest {
+  oneof request {
+    Open open = 1;
+    Ack ack = 2;
+  }
+}
+
+message StreamingDequeueResponse {
+  oneof response {
+    Message message = 1;
+    SettlementRejection settlement_rejection = 2;
+  }
+}

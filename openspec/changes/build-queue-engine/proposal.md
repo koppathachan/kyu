@@ -127,7 +127,11 @@ None. `openspec/specs/` is empty.
   engine, the reference storage server and their binaries.
 - **Edited**: `.gitignore`, for generated Go code.
 - **Untouched**: `LICENSE` and the module path.
-- **Toolchain**: Go 1.26, `buf` 1.50, `protoc` 36.1 — all already present.
+- **Toolchain**: Go 1.27.1, `buf` 1.50, `protoc` 36.1. The codegen plugins —
+  `protoc-gen-go` 1.36.12 and `protoc-gen-go-grpc` 1.6.2 — are pinned by
+  `go.mod` tool directives rather than installed globally, so generation
+  needs no network and cannot drift between machines. `buf` compiles the
+  protos itself; `protoc` is present but is not on the generation path.
 - **CI**: two new gates — `buf` breaking-change detection against the previous
   commit for `spec/`, and a codegen-drift check that fails if regeneration
   changes the working tree.

@@ -1,39 +1,39 @@
 ## 1. Repository layout, and removing the prototype
 
-- [ ] 1.1 Create `spec/` as the contract root, with the directory path under it mirroring the proto package exactly, so `spec/` is the sole `--proto_path` and a package name and a file path never disagree
+- [x] 1.1 Create `spec/` as the contract root, with the directory path under it mirroring the proto package exactly, so `spec/` is the sole `--proto_path` and a package name and a file path never disagree
 - [x] 1.2 Delete `q/`, `proto/q/` and `cmd/q/` in one commit, and drop the MongoDB driver from `go.mod`. The prototype shares no interface with what replaces it and marking messages read on send is the behaviour being fixed
 - [x] 1.3 Delete `pubsub/`, `proto/pubsub/` and `cmd/pubsub/` in the same commit — pub/sub imports `q` and `q/msg` and cannot outlive them — along with `scripts/` and the `Makefile`, which drove the deleted binaries, and rewrite `README.md` from the specs so the repository describes what is being built rather than what was deleted
-- [ ] 1.4 Add `.gitignore` entries for generated Go code — Go is the only language this change generates into — and verify nothing generated is committed
+- [x] 1.4 Add `.gitignore` entries for generated Go code — Go is the only language this change generates into — and verify nothing generated is committed
 
 ## 2. The storage contract — `spec/kyu/storage/v1/storage.proto`
 
-- [ ] 2.1 Declare `package kyu.storage.v1` and the `Storage` service with exactly the eight methods, and no more
-- [ ] 2.2 Define `Item` with exactly `partition`, `id`, `position`, `value`, `hold_until` and `attempts`
-- [ ] 2.2a Define a partition as a name plus an opaque settings value, with a comment saying storage stores and returns it unread — this is what lets queue policy be durable without any SPI field naming a queue concept
-- [ ] 2.3 Define `CreatePartition` and `ListPartitions`, with partition settings carried on both so the reaper can read back what creation recorded
-- [ ] 2.4 Define `Put` taking the caller's id and returning the position storage assigned, with `ALREADY_EXISTS` on a duplicate id and `NOT_FOUND` on a partition that does not exist — no implicit partition creation
-- [ ] 2.5 Define `Claim` taking partition, `now`, `hold_until` and attempt ceiling, and returning an optional item — with the indivisibility of select-hold-increment stated in the comment as a requirement on the implementation, not a hint
-- [ ] 2.6 Define `Release`, `Delete` and `Move`. `Release` and `Delete` take a required expected attempt count. `Move` takes none — not because the message is safe, but because no fence helps: attempts do not change while a message is held, so the reaper cannot distinguish a lapsed hold from a consumer still working under one. State `Move`'s all-or-nothing requirement in its comment, and do not claim in it that the transfer is race-free
-- [ ] 2.7 Define `Scan` taking partition, instant, attempt floor and limit, and returning items — with a comment saying plainly that it is called on a timer for every partition and will usually return nothing, so an implementer knows what they are optimising for
-- [ ] 2.8 Write the normative comments. With no conformance program in this change, the proto is the whole of what a customer receives: every atomicity, ordering and clock requirement in `specs/storage-spi` must be stated in the file itself
-- [ ] 2.9 Verify against `specs/storage-spi` that no identifier anywhere in the file names a queue, message, lease, delivery, acknowledgement or dead letter
-- [ ] 2.10 State in the comments on `Delete` and `Release` that the expected attempt count is not an optimisation and not optional — a backend that ignores it lets a slow consumer destroy a message another consumer is processing, and nothing upstream can detect that it did
+- [x] 2.1 Declare `package kyu.storage.v1` and the `Storage` service with exactly the eight methods, and no more
+- [x] 2.2 Define `Item` with exactly `partition`, `id`, `position`, `value`, `hold_until` and `attempts`
+- [x] 2.2a Define a partition as a name plus an opaque settings value, with a comment saying storage stores and returns it unread — this is what lets queue policy be durable without any SPI field naming a queue concept
+- [x] 2.3 Define `CreatePartition` and `ListPartitions`, with partition settings carried on both so the reaper can read back what creation recorded
+- [x] 2.4 Define `Put` taking the caller's id and returning the position storage assigned, with `ALREADY_EXISTS` on a duplicate id and `NOT_FOUND` on a partition that does not exist — no implicit partition creation
+- [x] 2.5 Define `Claim` taking partition, `now`, `hold_until` and attempt ceiling, and returning an optional item — with the indivisibility of select-hold-increment stated in the comment as a requirement on the implementation, not a hint
+- [x] 2.6 Define `Release`, `Delete` and `Move`. `Release` and `Delete` take a required expected attempt count. `Move` takes none — not because the message is safe, but because no fence helps: attempts do not change while a message is held, so the reaper cannot distinguish a lapsed hold from a consumer still working under one. State `Move`'s all-or-nothing requirement in its comment, and do not claim in it that the transfer is race-free
+- [x] 2.7 Define `Scan` taking partition, instant, attempt floor and limit, and returning items — with a comment saying plainly that it is called on a timer for every partition and will usually return nothing, so an implementer knows what they are optimising for
+- [x] 2.8 Write the normative comments. With no conformance program in this change, the proto is the whole of what a customer receives: every atomicity, ordering and clock requirement in `specs/storage-spi` must be stated in the file itself
+- [x] 2.9 Verify against `specs/storage-spi` that no identifier anywhere in the file names a queue, message, lease, delivery, acknowledgement or dead letter
+- [x] 2.10 State in the comments on `Delete` and `Release` that the expected attempt count is not an optimisation and not optional — a backend that ignores it lets a slow consumer destroy a message another consumer is processing, and nothing upstream can detect that it did
 
 ## 3. The client contract — `spec/kyu/v1/kyu.proto`
 
-- [ ] 3.1 Declare `package kyu.v1` and the `Kyu` service with `CreateQueue`, `Enqueue`, `Dequeue`, `StreamingDequeue` and `Ack`
-- [ ] 3.2 Define `CreateQueue` carrying hold duration and attempt ceiling, both optional and defaulted
-- [ ] 3.3 Define `Enqueue` returning the message id and the position
-- [ ] 3.4 Define `Dequeue` returning an optional message and a lease token, and `Ack` taking that token. `Ack` fails with `ABORTED` when the hold has lapsed and the message has passed on — not `FAILED_PRECONDITION`, which a client receives for an unreadable queue, and not `OK`, which would tell a consumer it settled a message someone else is still processing
-- [ ] 3.5 Define `StreamingDequeue` with the client stream as a `oneof` of `Open` and `Ack`, and the server stream as a `oneof` of a message and a settlement rejection naming a message id. The rejection is what keeps the streaming form's semantics identical to the unary form's `ABORTED`. `Open` carries the queue and the in-flight limit and nothing else — hold duration is the queue's setting, deliberately not per-call, so the two forms cannot diverge
-- [ ] 3.6 Confirm this file imports nothing from `kyu.storage.v1`. The two contracts are independent; sharing a type would make an engine-side change a storage-side breaking change
+- [x] 3.1 Declare `package kyu.v1` and the `Kyu` service with `CreateQueue`, `Enqueue`, `Dequeue`, `StreamingDequeue` and `Ack`
+- [x] 3.2 Define `CreateQueue` carrying hold duration and attempt ceiling, both optional and defaulted
+- [x] 3.3 Define `Enqueue` returning the message id and the position
+- [x] 3.4 Define `Dequeue` returning an optional message and a lease token, and `Ack` taking that token. `Ack` fails with `ABORTED` when the hold has lapsed and the message has passed on — not `FAILED_PRECONDITION`, which a client receives for an unreadable queue, and not `OK`, which would tell a consumer it settled a message someone else is still processing
+- [x] 3.5 Define `StreamingDequeue` with the client stream as a `oneof` of `Open` and `Ack`, and the server stream as a `oneof` of a message and a settlement rejection naming a message id. The rejection is what keeps the streaming form's semantics identical to the unary form's `ABORTED`. `Open` carries the queue and the in-flight limit and nothing else — hold duration is the queue's setting, deliberately not per-call, so the two forms cannot diverge
+- [x] 3.6 Confirm this file imports nothing from `kyu.storage.v1`. The two contracts are independent; sharing a type would make an engine-side change a storage-side breaking change
 
 ## 4. Codegen
 
-- [ ] 4.1 Add `buf.yaml` and `buf.gen.yaml` rooted at `spec/`, pinning plugin versions through `go.mod` tool directives
+- [x] 4.1 Add `buf.yaml` and `buf.gen.yaml` rooted at `spec/`, pinning plugin versions through `go.mod` tool directives
 - [ ] 4.2 Add breaking-change detection against the previous commit for `spec/`, so a change to a published package is caught mechanically rather than by review
-- [ ] 4.3 Add a `Makefile` target that regenerates and fails if the working tree changes, so a stale generation cannot be committed
-- [ ] 4.4 Generate both packages and confirm the storage server interface and the client stubs compile
+- [x] 4.3 Add a `Makefile` target that regenerates and fails if the working tree changes, so a stale generation cannot be committed
+- [x] 4.4 Generate both packages and confirm the storage server interface and the client stubs compile
 
 ## 5. Reference storage server
 

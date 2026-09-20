@@ -10,11 +10,12 @@ deployments on two different backends cannot disagree about what a queue does.
 
 ## Status
 
-**Nothing is implemented yet.** This repository currently holds the
-specification for the first change and no code. The Go/MongoDB prototype that
-used to live here has been deleted: it marked messages read the instant it
-sent them, and had no leases, no acknowledgement, no retry and no dead
-letters.
+**The contracts exist; the queue does not.** Both `.proto` files are written,
+Go code generates from them, and `kyu-engine` serves `kyu.v1.Kyu` over gRPC —
+with every method returning `UNIMPLEMENTED`. There is no engine logic, no
+storage server and no reaper yet. The Go/MongoDB prototype that used to live
+here has been deleted: it marked messages read the instant it sent them, and
+had no leases, no acknowledgement, no retry and no dead letters.
 
 The specification is in [`openspec/changes/build-queue-engine/`](openspec/changes/build-queue-engine/).
 "Done" for that change means a message has been enqueued, leased, redelivered
@@ -127,6 +128,14 @@ stated inside one signature is the only kind an implementer reliably honours.
 ## Repository layout
 
 ```text
+spec/                    the contract root, and the sole proto path
+  buf.yaml               module, lint and breaking-change configuration
+  buf.gen.yaml           what is generated, and with which plugins
+  kyu/v1/kyu.proto               what applications call
+  kyu/storage/v1/storage.proto   what deployments implement
+cmd/kyu-engine/          the engine binary
+internal/engine/         the engine
+gen/                     generated Go code — rebuilt, never committed
 openspec/
   changes/build-queue-engine/
     proposal.md          why this change exists and what it changes
@@ -136,15 +145,41 @@ openspec/
   specs/                 accepted specifications (empty until the first archive)
 ```
 
+The directory under `spec/` mirrors the proto package exactly, so a package
+name and a file path cannot disagree. Generated code is not committed: `gen/`
+is rebuilt from the contracts by `make generate`, and CI fails if regenerating
+changes the tree.
+
 Read `proposal.md` first, then `design.md` — the design carries the arguments
 and the diagrams — then the capability specs for the requirements themselves.
 
-Planned, and not yet present: `spec/` as the contract root, holding
-`spec/kyu/v1/kyu.proto` and `spec/kyu/storage/v1/storage.proto`; the engine;
-a reference in-memory storage server; and their binaries. Anyone deploying
-kyu will need to run a storage server or write one — there is no embedded
-default, and the reference server is a test fixture and a worked example, not
-a production backend.
+Still to come: the engine's logic, a reference in-memory storage server, and
+the reaper. Anyone deploying kyu will need to run a storage server or write
+one — there is no embedded default, and the reference server, when it exists,
+is a test fixture and a worked example, not a production backend.
+
+## Running what there is
+
+Requires Go 1.27 and [`buf`](https://buf.build). The codegen plugins are
+pinned by `go.mod` tool directives, so there is nothing else to install.
+
+```sh
+make generate     # rebuild gen/ from spec/
+make build        # build every binary
+make run-engine   # serve kyu.v1.Kyu on 127.0.0.1:50051
+make help         # every target
+```
+
+The server has reflection enabled, so it can be driven without a copy of the
+contract:
+
+```sh
+grpcurl -plaintext 127.0.0.1:50051 list kyu.v1.Kyu
+grpcurl -plaintext -d '{"queue":"orders"}' 127.0.0.1:50051 kyu.v1.Kyu/CreateQueue
+```
+
+Today that second command returns `Unimplemented`, which is the honest answer:
+the contract is registered and reachable, and nothing behind it is built.
 
 ## License
 

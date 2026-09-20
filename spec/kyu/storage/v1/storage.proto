@@ -1,0 +1,298 @@
+// Copyright (c) 2021 Akhil Sasidharan. MIT licensed.
+
+syntax = "proto3";
+
+// Package kyu.storage.v1 is the contract a kyu deployment implements.
+//
+// It stores items in partitions. It is not a queue, and nothing in it names
+// one: no method, message, field or enum value here refers to a queue, a
+// message, a lease, a delivery, an acknowledgement or a dead letter. Those are
+// kyu's concepts, and they reach this contract as argument values rather than
+// as vocabulary. An implementation that stores items and stamps numbers on
+// them admits far less interpretation than one told it is implementing a
+// lease.
+//
+// The package name is the version of this contract. There is no version field
+// and none is to be added. A change that breaks this contract takes a new
+// package, so a server serving some other package fails kyu's first call with
+// UNIMPLEMENTED rather than serving a contract kyu did not ask for. No
+// handshake is needed and none is to be added.
+//
+// Two rules run through everything below.
+//
+// This server never reads a clock. Every operation whose outcome depends on
+// time is given that time as an argument, no response carries a timestamp, and
+// no implementation consults its own clock to decide any outcome. It compares
+// the number it was given against the number it stored; it does not know that
+// either is a time. One clock in the system is what stops two components
+// disagreeing about whether a hold has lapsed.
+//
+// Delete is the only operation that destroys an item. Nothing else removes
+// one — not Claim, not Release, not Move, not Scan — and no implementation
+// removes an item on its own initiative: not on expiry, not on a size bound,
+// not on an age bound. Retention is the deployment's business and is invisible
+// to kyu. An implementation that evicts items independently is not
+// implementing this contract.
+package kyu.storage.v1;
+
+option go_package = "github.com/sasidakh/kyu/gen/kyu/storage/v1;storagev1";
+
+// Storage holds items in partitions.
+//
+// These eight methods are the whole contract. There is deliberately no read by
+// id: kyu performs none, and an operation nobody calls is an operation every
+// implementer writes for nobody.
+service Storage {
+  // CreatePartition creates one partition and records its settings.
+  //
+  // Fails with ALREADY_EXISTS if a partition of that name is already present,
+  // and changes nothing.
+  rpc CreatePartition(CreatePartitionRequest) returns (CreatePartitionResponse);
+
+  // ListPartitions returns every partition, each with the settings value it
+  // was created with, returned byte for byte.
+  rpc ListPartitions(ListPartitionsRequest) returns (ListPartitionsResponse);
+
+  // Put appends one item to a partition and assigns its position.
+  //
+  // Fails with ALREADY_EXISTS if that id is already present in that partition,
+  // leaving the existing item untouched, and with NOT_FOUND if the partition
+  // does not exist. A missing partition is never created implicitly: the
+  // caller creates partitions deliberately, and creating one here would turn a
+  // caller's typo into a silently empty partition nobody reads.
+  rpc Put(PutRequest) returns (PutResponse);
+
+  // Claim takes and holds the first eligible item, in one indivisible step.
+  //
+  // Eligible means: the item's hold has lapsed or was never set, and its
+  // attempt count is below the ceiling given. Of those, the one with the
+  // lowest position is selected. Its hold is set to the instant given and its
+  // attempt count is incremented by one, and it is returned as it now stands.
+  //
+  // Selection, hold and increment are one indivisible step. Two concurrent
+  // calls never return the same item. This is a requirement on the
+  // implementation, not a hint: a read followed by a separate conditional
+  // write does not satisfy it, and a caller cannot detect that it did not.
+  //
+  // Finding nothing eligible is a success carrying no item. It is not an
+  // error, and must not be reported as one — an idle partition is the ordinary
+  // state of most partitions most of the time.
+  rpc Claim(ClaimRequest) returns (ClaimResponse);
+
+  // Release clears one item's hold, leaving its attempt count untouched.
+  //
+  // The caller states the attempt count it expects. See
+  // ReleaseRequest.expected_attempts, which is required.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+
+  // Delete removes one item. It is the only operation that destroys anything.
+  //
+  // The caller states the attempt count it expects. See
+  // DeleteRequest.expected_attempts, which is required.
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+
+  // Move relocates one item from one partition to another, or does nothing.
+  //
+  // The item keeps its id, its value and its attempt count, and is assigned a
+  // position in the destination. Its hold is not carried across.
+  //
+  // Both halves take effect together or neither does. No state may be
+  // observable in which the item is absent from both partitions, or present in
+  // both. One call names two partitions precisely so that this is obviously a
+  // transaction: a read and a write linked only by a paragraph of prose is not
+  // an implementation of it.
+  //
+  // Fails with NOT_FOUND if the item is not in the source, and with
+  // ALREADY_EXISTS if an item of that id is already present in the
+  // destination. Either way nothing is modified.
+  //
+  // Note what this call does not promise. It carries no expected attempt
+  // count, so it cannot tell a lapsed hold from a caller still working under
+  // one, and moving an item out from under such a caller is possible. That is
+  // a known exposure in kyu's design rather than something an implementation
+  // can close, and no fence here would help.
+  rpc Move(MoveRequest) returns (MoveResponse);
+
+  // Scan returns items matching fixed filters, and changes nothing.
+  //
+  // It never sets a hold and never increments an attempt count. An item it
+  // returns is still claimable, exactly as though the scan had not happened.
+  //
+  // Expect this call on a timer, against every partition, returning nothing
+  // almost every time. That is what it is for and what it should be optimised
+  // for: a full partition sweep on every call will be the first thing to fall
+  // over under load.
+  rpc Scan(ScanRequest) returns (ScanResponse);
+}
+
+// Partition is a name and a settings value.
+message Partition {
+  // name identifies the partition. It is supplied by the caller.
+  string name = 1;
+
+  // settings is stored and returned unchanged, and is never interpreted,
+  // validated or acted upon. Its contents are meaningful only to the caller,
+  // which is what lets the caller keep durable per-partition policy here
+  // without any field of this contract naming what that policy is.
+  bytes settings = 2;
+}
+
+// Item is one stored value and the bookkeeping that goes with it.
+message Item {
+  // partition the item is in.
+  string partition = 1;
+
+  // id identifies the item within its partition. It is supplied by the caller
+  // on Put and is preserved across a Move.
+  string id = 2;
+
+  // position orders items within a partition. It is assigned by this server,
+  // never by the caller.
+  int64 position = 3;
+
+  // value is opaque. This server does not read it.
+  bytes value = 4;
+
+  // hold_until is a number the caller supplied, compared against other numbers
+  // the caller supplies. Absent means the item is not held. This server does
+  // not know that it is a time and must not treat it as one.
+  optional int64 hold_until = 5;
+
+  // attempts counts the Claims this item has been returned by. It rises by
+  // exactly one per Claim, and nothing else changes it.
+  uint32 attempts = 6;
+}
+
+message CreatePartitionRequest {
+  Partition partition = 1;
+}
+
+message CreatePartitionResponse {}
+
+message ListPartitionsRequest {}
+
+message ListPartitionsResponse {
+  repeated Partition partitions = 1;
+}
+
+message PutRequest {
+  string partition = 1;
+
+  // id is the caller's. This server does not generate ids.
+  string id = 2;
+
+  bytes value = 3;
+}
+
+message PutResponse {
+  // position this server assigned.
+  //
+  // Within one partition, positions are totally ordered and increase with the
+  // order in which Put calls complete: an item whose Put completed before
+  // another's began has the lower position. Concurrent Puts may take their
+  // positions in either order.
+  //
+  // This is the requirement most easily broken by accident and the hardest to
+  // notice when it is. A position taken from a clock, or from any source not
+  // serialised with the write itself, will reorder items under skew or
+  // concurrency — rarely, unreproducibly, and without any error to show for
+  // it. Take it from a counter incremented inside the same critical section as
+  // the write.
+  int64 position = 1;
+}
+
+message ClaimRequest {
+  string partition = 1;
+
+  // now is the instant eligibility is decided against. An item is eligible
+  // when its hold is absent or at or before this value.
+  int64 now = 2;
+
+  // hold_until is stored on the item this call returns.
+  int64 hold_until = 3;
+
+  // attempt_ceiling excludes items. An item whose attempt count is at or above
+  // this value is not returned, however long its hold has been lapsed.
+  uint32 attempt_ceiling = 4;
+}
+
+message ClaimResponse {
+  // item is absent when nothing was eligible, which is a success.
+  optional Item item = 1;
+}
+
+message ReleaseRequest {
+  string partition = 1;
+  string id = 2;
+
+  // expected_attempts is required, and the call takes effect only if the named
+  // item's attempt count equals it. Otherwise the call fails with
+  // FAILED_PRECONDITION and changes nothing. There is no unconditional form of
+  // this call and none is to be added.
+  //
+  // This is not an optimisation and it is not optional. Without it a
+  // settlement carries no evidence of which hold it belongs to, and a caller
+  // that is slow rather than dead — one whose hold lapsed while it was still
+  // working — clears a hold that has since passed to another caller, which is
+  // then working on an item it no longer holds. Nothing upstream can detect
+  // that an implementation ignored this field; it will simply lose work, in a
+  // deployment nobody can debug from the outside.
+  //
+  // The attempt count is the fence because Claim increments it in the same
+  // indivisible step that grants a hold. It rises by exactly one per hold and
+  // never repeats, so it names a hold exactly, and this server has nothing new
+  // to generate or store.
+  uint32 expected_attempts = 3;
+}
+
+message ReleaseResponse {}
+
+message DeleteRequest {
+  string partition = 1;
+  string id = 2;
+
+  // expected_attempts is required, and the call takes effect only if the named
+  // item's attempt count equals it. Otherwise the call fails with
+  // FAILED_PRECONDITION and changes nothing. There is no unconditional form of
+  // this call and none is to be added.
+  //
+  // This is not an optimisation and it is not optional. This call destroys an
+  // item. Without the fence, a caller whose hold lapsed while it was still
+  // working destroys an item another caller has since claimed and is at that
+  // moment processing. Nothing upstream can detect that an implementation
+  // ignored this field.
+  //
+  // See ReleaseRequest.expected_attempts for why the attempt count is what the
+  // fence is made of.
+  uint32 expected_attempts = 3;
+}
+
+message DeleteResponse {}
+
+message MoveRequest {
+  string source_partition = 1;
+  string destination_partition = 2;
+  string id = 3;
+}
+
+message MoveResponse {}
+
+message ScanRequest {
+  string partition = 1;
+
+  // now is the instant eligibility is decided against, as in Claim.
+  int64 now = 2;
+
+  // attempt_floor selects items. An item whose attempt count is at or above
+  // this value may be returned; one below it may not.
+  uint32 attempt_floor = 3;
+
+  // limit caps the number of items returned. The caller always supplies one,
+  // so this server is never asked to choose a page size.
+  uint32 limit = 4;
+}
+
+message ScanResponse {
+  // items, lowest position first, at most limit of them.
+  repeated Item items = 1;
+}
