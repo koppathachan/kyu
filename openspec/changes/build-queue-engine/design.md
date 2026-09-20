@@ -18,6 +18,60 @@ one, and put every guarantee that matters inside a single call, where the
 shape of the signature states the requirement even to an implementer who did
 not read the spec.
 
+The shape of all that is two contracts and one component in the middle that
+knows what a queue is:
+
+```text
+  ┌──────────────────────────────────────────────────────────────┐
+  │ applications                                                 │
+  │   Enqueue · Dequeue · Ack · StreamingDequeue                 │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 │  kyu.v1.Kyu — queues, messages,
+                                 │  leases, acks, dead letters
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │ engine                                                       │
+  │   queue semantics, written once                              │
+  │   the only clock in the system                               │
+  │   reaper — one goroutine per queue                           │
+  └──────────────────────────────┬───────────────────────────────┘
+                                 │  kyu.storage.v1.Storage — partitions,
+                                 │  items, positions, holds, attempts
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────┐
+  │ storage server — supplied by the deployment                  │
+  │   eight operations · no clock · nothing that names a queue   │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+and one object, a message, whose whole life is four states and the calls that
+move it between them:
+
+```text
+                            Put
+                             │
+                             ▼
+                      ┌──────────────┐
+      ┌──────────────►│   eligible   │◄───── hold_until ≤ now
+      │               └──────┬───────┘       (not an event — the
+      │                      │                next Claim finds it)
+      │                      │ Claim: attempts += 1, hold set
+      │                      ▼
+      │               ┌──────────────┐
+      └─── Release ───┤     held     ├──── Delete(expect = attempts) ──► gone
+         (attempts    └──────┬───────┘
+          unchanged)         │ the claim that reached the ceiling,
+                             │ and then the hold lapsing
+                             ▼
+                      ┌──────────────────┐  Scan + Move  ┌───────────┐
+                      │  at the ceiling  ├──────────────►│  in .dlq  │
+                      │ Claim refuses it │  (the reaper) │ terminal  │
+                      └──────────────────┘               └───────────┘
+```
+
+Everything below is an argument about where one line in one of those two
+pictures belongs.
+
 ## Goals / Non-Goals
 
 **Goals**
@@ -69,6 +123,26 @@ interpretation. It also keeps the boundary honest: when the north and south
 interfaces share vocabulary, the engine looks like a passthrough, and the
 question "what is kyu actually doing?" has no visible answer.
 
+One message's round trip, with each vocabulary staying on its own side of the
+engine:
+
+```text
+  client              engine                         storage
+    │                   │                               │
+    │ Enqueue ─────────►│                               │
+    │                   │ Put(partition, id, value) ───►│  position assigned
+    │◄── id, position ──│◄──────────── item ────────────│
+    │                   │                               │
+    │ Dequeue ─────────►│                               │
+    │                   │ Claim(p, now, hold, ceiling)─►│  attempts 0 → 1
+    │                   │                               │  hold_until set
+    │◄─ message, token ─│◄──────────── item ────────────│
+    │                   │                               │
+    │ Ack(token) ──────►│                               │
+    │                   │ Delete(p, id, expect = 1) ───►│  count matches,
+    │◄────── OK ────────│◄───────────── OK ─────────────│  item removed
+```
+
 *Alternative considered:* the previous iteration's five generic primitives —
 `Put`, `Get`, `Update`, `Delete`, `Scan` over items with an attribute map,
 preconditions and a `Scan` taking `equals`, `range`, `order_by` and page
@@ -110,6 +184,27 @@ anyway.
 `Delete` and `Release` both require the caller to state the attempt count it
 expects, and storage refuses the call if the item's count differs.
 
+The case it exists for is a consumer that is slow rather than dead:
+
+```text
+  consumer A     consumer B        engine                    storage
+      │              │                  │                       │
+      │ Dequeue ─────┼─────────────────►│ Claim ───────────────►│ attempts → 1
+      │◄─────────────┼── msg + token(1) │◄──────────────── item │ hold set
+      │              │                  │                       │
+      │ (working)    │                  │                       │
+      │              │     the hold lapses — no event, nothing observes it
+      │              │                  │                       │
+      │              │ Dequeue ────────►│ Claim ───────────────►│ attempts → 2
+      │              │◄─ msg + token(2) │◄──────────────── item │ hold set
+      │              │                  │                       │
+      │ Ack(token 1) ┼─────────────────►│ Delete(expect = 1) ──►│ count is 2
+      │◄─────────────┼───────── ABORTED │◄─ FAILED_PRECONDITION │ unchanged
+```
+
+Without the fence, A's `Delete` at the bottom destroys the message B is at
+that moment processing.
+
 `specs/storage-spi` states the requirement and why it exists. The decision
 here is what the fence is made of.
 
@@ -145,6 +240,29 @@ triggers a `ListPartitions` before the call is answered, because that client
 cannot wait for a timer. Sweeping is covered by re-enumerating periodically,
 because a queue this replica never serves would otherwise never be swept here
 at all.
+
+```text
+  a client reaches replica B for "orders", created earlier on replica A
+        │
+        ▼
+   does B know it?  ── yes ──► serve the call
+        │ no
+        ▼
+   in B's negative cache (5s)? ── yes ──► NOT_FOUND, no storage call
+        │ no
+        ▼
+   ListPartitions ──────────────────────────────────────► storage
+        │◄──────────── orders, orders.dlq, invoices, … ──
+        ▼
+   present? ── yes ──► serve the call, and spawn this queue's reaper here
+        └─ no ──► NOT_FOUND, and remember the absence for 5s
+
+  independently, every KYU_DISCOVERY_INTERVAL:
+
+   ListPartitions ──► storage ──► spawn a reaper for every queue this
+                                  replica has not seen, so a queue created
+                                  elsewhere is still swept here
+```
 
 *Alternative considered:* declaring discovery to be per-instance-at-startup,
 and documenting that a queue is served only by replicas started after it was
@@ -224,6 +342,22 @@ storage server, almost all returning nothing. So: **jitter** the phase, and
 back to the floor on any hit. Busy queues stay responsive; idle ones go
 quiet.
 
+```text
+  reaper for "orders"                          storage
+        │                                         │
+        │ Scan(orders, now, floor = ceiling,      │  items whose hold has
+        │      limit = 100) ─────────────────────►│  lapsed with attempts
+        │◄──────────────── items ─────────────────│  already spent
+        │                                         │
+        │ Move(orders, orders.dlq, id) ──────────►│  both halves or neither
+        │◄──────────── OK | NOT_FOUND ────────────│  NOT_FOUND: another
+        │                                         │  replica got there first
+        ▼
+   empty result ──► interval × 2, up to KYU_SWEEP_INTERVAL_MAX
+   anything found ► interval back to KYU_SWEEP_INTERVAL
+   either way ────► sleep, with jitter on the phase
+```
+
 **No timing guarantee is published.** How quickly a message reaches `.dlq`
 depends on the sweep interval, the backlog, the batch size and the storage
 implementation's own speed. Best effort, stated as such.
@@ -257,6 +391,25 @@ queue and nobody else gets anything.
 
 Acknowledgements may arrive in any order; each names its message.
 
+```text
+  consumer                              engine
+     │                                  │
+     │ Open("orders", in_flight = 2) ──►│
+     │                                  │ Claim ──► m1
+     │◄───────────────────────────── m1 │ Claim ──► m2
+     │◄───────────────────────────── m2 │
+     │                                  │ at the limit: no further Claim,
+     │                                  │ however deep the queue is
+     │                                  │
+     │ Ack(m2) ────────────────────────►│ Delete(m2, expect = its attempts)
+     │◄───────────────────────────── m3 │ one settled, so one more Claim
+     │                                  │
+     ✗ the stream breaks, m1 and m3 held│
+                                        │ Release(m1), Release(m3)
+                                        │ both claimable at once, rather
+                                        │ than in 30 seconds
+```
+
 *Alternative considered:* unary only. Rejected — but unary is kept alongside,
 as `Dequeue` plus `Ack`, because it is far simpler to call from a script or a
 language with poor streaming support, and because the two share all their
@@ -271,6 +424,18 @@ well-known gRPC precedent for exactly this pair.
 told the two are related, because the relationship is a queue concept.
 Client-supplied names ending in `.dlq` are refused, so the companion's name
 can never collide with a queue someone asked for.
+
+```text
+  CreateQueue("orders", hold = 30s, ceiling = 5)
+        │
+        ├─► CreatePartition("orders",     settings = <opaque bytes>)
+        └─► CreatePartition("orders.dlq", settings = <opaque bytes>)
+
+  what the engine sees          what storage sees
+  ────────────────────          ─────────────────
+  a queue and its dead          two partitions, unrelated, each with a
+  letter companion              value it stores and never reads
+```
 
 ### Per-queue settings live in storage
 
