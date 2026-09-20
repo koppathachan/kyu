@@ -3,7 +3,15 @@
 ### Requirement: [ENGINE] A message leaves a queue only when it is acknowledged
 The engine SHALL call `Delete` for a message when, and only when, a consumer acknowledges it. No other event SHALL cause a message to be deleted.
 
-Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` refused with `FAILED_PRECONDITION` means the message's hold lapsed and it has passed to another consumer; it is no longer this consumer's to settle, and the engine SHALL treat the refusal as an ordinary outcome.
+Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` refused with `FAILED_PRECONDITION` means the message's hold lapsed and it has passed to another consumer; it is no longer this consumer's to settle.
+
+The refusal is ordinary for the engine and SHALL NOT be reported as a fault, but it SHALL be reported to the consumer, which asked for something that did not happen. `Ack` SHALL fail with `ABORTED`. On a stream, the engine SHALL send a settlement rejection naming the message. Telling the consumer `OK` would tell it that it had settled a message another consumer is at that moment still processing.
+
+`ABORTED` and not `FAILED_PRECONDITION`: this is a concurrency conflict, and `FAILED_PRECONDITION` is the status a client receives for a queue whose settings this engine cannot read — an unrelated condition calling for an unrelated response.
+
+#### Scenario: A consumer is told when it lost the message
+- **WHEN** a consumer acknowledges a message whose hold lapsed and which another consumer now holds
+- **THEN** `Ack` fails with `ABORTED`, or on a stream a settlement rejection naming that message is sent
 
 #### Scenario: An unacknowledged message is not deleted
 - **WHEN** a consumer receives a message and never acknowledges it

@@ -33,7 +33,9 @@ It does not remove every race. A message reaches the ceiling by being claimed, a
 ### Requirement: [ENGINE] The engine sweeps for exhausted messages without being asked
 The engine SHALL run one sweep per queue, each periodically calling `Scan` for messages whose hold has lapsed with attempts at or above that queue's ceiling, and `Move`ing each result to the queue's `.dlq` partition.
 
-A sweep SHALL be started for a queue when it is created, and for every queue returned by `ListPartitions` when the engine starts. Without the second, sweeping stops silently after the first restart.
+A sweep SHALL be started for a queue when it is created, for every queue returned by `ListPartitions` when the engine starts, and for every queue not already swept that a later `ListPartitions` returns. The engine SHALL re-enumerate partitions periodically, at a configurable interval.
+
+Startup enumeration alone is not enough, and its absence fails in the direction that matters. Queues are created on whichever replica a client reached, so a queue created on one replica is unknown to every other replica started before it. Those replicas run no sweep for it; if the replica that created it goes away, the queue is swept by nobody, and messages sit at the attempt ceiling — undeliverable and untransferred — for as long as that lasts. Periodic re-enumeration is one call per interval per replica, against a per-queue scan cost that already dwarfs it.
 
 No sweep SHALL be started for a `.dlq` partition. There is nowhere for a message to move on from one.
 

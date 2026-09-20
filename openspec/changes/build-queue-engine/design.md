@@ -134,6 +134,28 @@ lapsed hold from a consumer still working under one. `Move` carries no fence
 because none would help, and the exposure is recorded under Risks rather than
 argued away. Two sweeps racing each other resolve through `NOT_FOUND`.
 
+### A queue is discovered, not assumed absent
+
+An engine that has never heard of a queue must not conclude it does not exist.
+Queues are created on whichever replica a client reached, and every other
+replica learns of them only from storage.
+
+So there are two paths, and both are needed. A client naming an unknown queue
+triggers a `ListPartitions` before the call is answered, because that client
+cannot wait for a timer. Sweeping is covered by re-enumerating periodically,
+because a queue this replica never serves would otherwise never be swept here
+at all.
+
+*Alternative considered:* declaring discovery to be per-instance-at-startup,
+and documenting that a queue is served only by replicas started after it was
+created. Coherent, and it makes correct operation depend on restarting every
+replica after every `CreateQueue`, which nobody will do.
+
+*Cost:* one `ListPartitions` per interval per replica, and a lookup on a cache
+miss. Against the per-queue scan traffic already in the design, both round to
+nothing. A negative cache keeps a client looping on a misspelled name from
+turning every call into an enumeration.
+
 ### A partition's settings are an opaque value
 
 Per-queue policy — hold duration, attempt ceiling — has to be durable, because
@@ -260,6 +282,7 @@ reaper learns thresholds from the call it was already making.
 | sweep floor | 1s | `KYU_SWEEP_INTERVAL`, engine-wide |
 | sweep ceiling | 30s | `KYU_SWEEP_INTERVAL_MAX`, engine-wide |
 | scan limit | 100 | `KYU_SCAN_LIMIT`, engine-wide |
+| discovery interval | 30s | `KYU_DISCOVERY_INTERVAL`, engine-wide |
 
 Thirty seconds of hold is a compromise: it is the recovery time after an
 engine crash, which argues shorter, and the budget a slow consumer gets
@@ -286,6 +309,14 @@ it is a known consequence rather than a discovered one.
 N times the storage load. Acceptable while replica counts are small. The
 reaper touches nothing but the SPI, so lifting it into a single separate
 binary later is mechanical.
+
+Note that this is the benign half of replication. The dangerous half was a
+queue swept by *no* replica: queues are created on whichever instance a client
+reached, so a startup-only enumeration leaves a queue invisible to every
+replica started before it, and if the replica that created it goes away, its
+messages sit at the ceiling untransferred. Periodic re-enumeration is what
+makes the wasteful claim true and the dangerous one impossible; the exposure
+is bounded by the discovery interval.
 
 **Two calls per successful message** — `Claim` then `Delete` — plus a third
 on failure → The price of not letting storage implement the queue. A fatter

@@ -25,6 +25,7 @@ The following statuses SHALL be used with these meanings and no others.
 | `NOT_FOUND` | The named partition, queue or item does not exist |
 | `ALREADY_EXISTS` | A partition or queue of that name is already present |
 | `FAILED_PRECONDITION` | The target exists, but not in the state the caller named — a settlement for a hold that has passed on, or a queue whose settings this engine cannot read |
+| `ABORTED` | The consumer's hold on a message lapsed; the message has passed to another consumer and is no longer this one's to settle |
 | `UNIMPLEMENTED` | The backend does not serve this contract |
 | `UNAVAILABLE` | The backend could not be reached or could not serve the call |
 | `INTERNAL` | The backend failed in a way it does not attribute to the request |
@@ -42,7 +43,9 @@ Statuses gRPC itself produces for the transport rather than for an outcome — `
 - **THEN** the stream ends with `CANCELLED`, its held messages are released, and nothing is reported as a failure
 
 ### Requirement: [ENGINE] The engine distinguishes a broken backend from an ordinary outcome
-On `UNAVAILABLE` or `INTERNAL` from the SPI, the engine SHALL surface the failure to its caller and SHALL NOT retry the call. On `NOT_FOUND` from `Move` or `Delete`, and on `FAILED_PRECONDITION` from `Delete` or `Release`, for a message that has already been settled, moved or reclaimed by another consumer, the engine SHALL treat the outcome as ordinary and continue. It SHALL NOT retry such a call, because the condition that refused it will not change.
+On `UNAVAILABLE` or `INTERNAL` from the SPI, the engine SHALL surface the failure to its caller and SHALL NOT retry the call. On `NOT_FOUND` from `Move` or `Delete`, and on `FAILED_PRECONDITION` from `Delete` or `Release`, for a message that has already been settled, moved or reclaimed by another consumer, the engine SHALL treat the outcome as ordinary and continue. It SHALL NOT retry such a call, because the condition that refused it will not change. An outcome that is ordinary for the engine is not necessarily ordinary for the consumer, which SHALL still be told — see `specs/message-dequeue`.
+
+`ALREADY_EXISTS` from `Move` SHALL NOT be treated as ordinary. An id is preserved across a move, so a destination already holding it means two messages share an id, which no correct sequence of engine calls produces. The engine SHALL report it, naming both partitions and the id, and SHALL NOT retry it.
 
 Retrying against a backend that is down converts one failure into a stream of them and delays the operator learning that anything is wrong. A queue that has lost its storage is not degraded; it is not a queue.
 
@@ -53,6 +56,10 @@ Retrying against a backend that is down converts one failure into a stream of th
 #### Scenario: A lost race is not an error
 - **WHEN** a `Move` returns `NOT_FOUND` because another engine already moved the message
 - **THEN** the sweep continues without reporting a failure
+
+#### Scenario: A colliding id on transfer is reported, not swallowed
+- **WHEN** a `Move` to a dead letter partition fails with `ALREADY_EXISTS`
+- **THEN** the engine reports it naming both partitions and the id, and does not retry
 
 #### Scenario: A settlement refused by its fence is not a failure
 - **WHEN** a `Delete` is refused with `FAILED_PRECONDITION` because the message's hold lapsed and passed to another consumer
