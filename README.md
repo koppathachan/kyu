@@ -135,7 +135,7 @@ spec/                    the contract root, and the sole proto path
   kyu/storage/v1/storage.proto   what deployments implement
 cmd/kyu-engine/          the engine binary
 internal/engine/         the engine
-gen/                     generated Go code — rebuilt, never committed
+gen/                     generated Go code, committed and kept in step
 openspec/
   changes/build-queue-engine/
     proposal.md          why this change exists and what it changes
@@ -146,9 +146,10 @@ openspec/
 ```
 
 The directory under `spec/` mirrors the proto package exactly, so a package
-name and a file path cannot disagree. Generated code is not committed: `gen/`
-is rebuilt from the contracts by `make generate`, and CI fails if regenerating
-changes the tree.
+name and a file path cannot disagree. The generated Go code in `gen/` is
+committed, as Go expects — `go get` and `go build` need nothing else. It is
+rebuilt by `make generate`, and CI fails if what is committed is not what
+regeneration produces.
 
 Read `proposal.md` first, then `design.md` — the design carries the arguments
 and the diagrams — then the capability specs for the requirements themselves.
@@ -160,14 +161,23 @@ is a test fixture and a worked example, not a production backend.
 
 ## Running what there is
 
-Requires Go 1.27 and [`buf`](https://buf.build). The codegen plugins are
-pinned by `go.mod` tool directives, so there is nothing else to install.
+Building and running need Go 1.27 and nothing else, because the generated
+code is committed:
 
 ```sh
-make generate     # rebuild gen/ from spec/
 make build        # build every binary
 make run-engine   # serve kyu.v1.Kyu on 127.0.0.1:50051
 make help         # every target
+```
+
+Changing a `.proto` additionally needs [`buf`](https://buf.build); the codegen
+plugins are pinned by `go.mod` tool directives, so there is nothing else to
+install.
+
+```sh
+make generate         # rebuild gen/ from spec/
+make generate-check   # fail if gen/ is not what regeneration produces
+make breaking         # fail if spec/ breaks the contract published on main
 ```
 
 The server has reflection enabled, so it can be driven without a copy of the

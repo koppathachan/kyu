@@ -29,7 +29,9 @@ Whether kyu offers pub/sub again is a question for a later change.
 
 - **Two contracts, one root.** `spec/kyu/v1/kyu.proto` is what applications
   call. `spec/kyu/storage/v1/storage.proto` is what deployments implement.
-  Generated code is not committed; `spec/` is the sole proto path.
+  Generated Go code is committed under `gen/`, which is what Go expects: a
+  consumer runs `go get` and builds, with no `buf` and no plugins. CI fails if
+  what is committed is not what regeneration produces.
 
 - **The storage SPI is eight operations over opaque items** and names no queue
   concept anywhere in it. It stores items in partitions. Every queue idea —
@@ -123,10 +125,10 @@ None. `openspec/specs/` is empty.
 - **Replaced**: the `Makefile`, deleted along with the binaries it drove and
   reintroduced by this change with targets for regeneration and for running
   the engine and the reference server.
-- **Added**: `spec/` as the contract root; a `buf` codegen pipeline; the
-  engine, the reference storage server and their binaries.
-- **Edited**: `.gitignore`, for generated Go code.
-- **Untouched**: `LICENSE` and the module path.
+- **Added**: `spec/` as the contract root; a `buf` codegen pipeline; `gen/`,
+  the generated Go code, committed; the engine, the reference storage server
+  and their binaries.
+- **Untouched**: `LICENSE`, `.gitignore` and the module path.
 - **Toolchain**: Go 1.27.1, `buf` 1.50, `protoc` 36.1. The codegen plugins —
   `protoc-gen-go` 1.36.12 and `protoc-gen-go-grpc` 1.6.2 — are pinned by
   `go.mod` tool directives rather than installed globally, so generation

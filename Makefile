@@ -1,20 +1,38 @@
 # kyu
+#
+# Building and running need Go alone: the generated code in gen/ is committed.
+# buf is needed only to change a contract in spec/.
 
 SPEC_DIR := spec
 GEN_DIR  := gen
 
+.PHONY: build
+build: ## Build every binary
+	go build ./...
+
+.PHONY: test
+test: ## Run the tests
+	go test ./...
+
+.PHONY: vet
+vet: ## Vet the Go code
+	go vet ./...
+
+.PHONY: run-engine
+run-engine: ## Run the engine
+	go run ./cmd/kyu-engine
+
 .PHONY: generate
-generate: ## Regenerate Go code from the contracts in spec/ into gen/
+generate: ## Regenerate gen/ from the contracts in spec/
 	cd $(SPEC_DIR) && buf generate
 
 .PHONY: generate-check
-generate-check: generate ## Fail if regenerating changed the tree (a CI gate)
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "regeneration changed the working tree:"; \
-		git status --porcelain; \
+generate-check: generate ## Fail if gen/ is not what regeneration produces (a CI gate)
+	@if [ -n "$$(git status --porcelain -- $(GEN_DIR))" ]; then \
+		echo "the committed generated code is not what regeneration produces:"; \
+		git status --porcelain -- $(GEN_DIR); \
 		echo; \
-		echo "either the generated code is stale, or some of it was committed;"; \
-		echo "gen/ is ignored on purpose and must stay that way"; \
+		echo "run 'make generate' and commit the result"; \
 		exit 1; \
 	fi
 
@@ -25,26 +43,6 @@ lint-proto: ## Lint the contracts
 .PHONY: breaking
 breaking: ## Fail if spec/ breaks the contract published on main
 	buf breaking $(SPEC_DIR) --against '.git#branch=main,subdir=spec'
-
-.PHONY: build
-build: generate ## Build every binary
-	go build ./...
-
-.PHONY: run-engine
-run-engine: generate ## Run the engine
-	go run ./cmd/kyu-engine
-
-.PHONY: test
-test: generate ## Run the tests
-	go test ./...
-
-.PHONY: vet
-vet: generate ## Vet the Go code
-	go vet ./...
-
-.PHONY: clean
-clean: ## Remove generated code
-	rm -rf $(GEN_DIR)
 
 .PHONY: help
 help: ## List targets
