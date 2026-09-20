@@ -27,8 +27,8 @@ pub/sub service goes with them: it is a gRPC client of `q.Q` and its generated
 code carries `q/msg` types, so it cannot outlive the service it consumes.
 Whether kyu offers pub/sub again is a question for a later change.
 
-- **Two contracts, one root.** `spec/kyu/v1/kyu.proto` is what applications
-  call. `spec/kyu/storage/v1/storage.proto` is what deployments implement.
+- **Two contracts, one root.** `proto/kyu/v1/kyu.proto` is what applications
+  call. `proto/kyu/storage/v1/storage.proto` is what deployments implement.
   Generated Go code is committed under `gen/`, which is what Go expects: a
   consumer runs `go get` and builds, with no `buf` and no plugins. CI fails if
   what is committed is not what regeneration produces.
@@ -125,7 +125,7 @@ None. `openspec/specs/` is empty.
 - **Replaced**: the `Makefile`, deleted along with the binaries it drove and
   reintroduced by this change with targets for regeneration and for running
   the engine and the reference server.
-- **Added**: `spec/` as the contract root; a `buf` codegen pipeline; `gen/`,
+- **Added**: `proto/` as the contract root; a `buf` codegen pipeline; `gen/`,
   the generated Go code, committed; the engine, the reference storage server
   and their binaries.
 - **Untouched**: `LICENSE`, `.gitignore` and the module path.
@@ -135,7 +135,7 @@ None. `openspec/specs/` is empty.
   needs no network and cannot drift between machines. `buf` compiles the
   protos itself; `protoc` is present but is not on the generation path.
 - **CI**: two new gates — `buf` breaking-change detection against the previous
-  commit for `spec/`, and a codegen-drift check that fails if regeneration
+  commit for `proto/`, and a codegen-drift check that fails if regeneration
   changes the working tree.
 - **Anyone deploying kyu** must now run a storage server or write one. There
   is no embedded default.

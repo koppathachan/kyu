@@ -128,7 +128,7 @@ stated inside one signature is the only kind an implementer reliably honours.
 ## Repository layout
 
 ```text
-spec/                    the contract root, and the sole proto path
+proto/                   the contract root, and the sole proto path
   buf.yaml               module, lint and breaking-change configuration
   buf.gen.yaml           what is generated, and with which plugins
   kyu/v1/kyu.proto               what applications call
@@ -145,7 +145,7 @@ openspec/
   specs/                 accepted specifications (empty until the first archive)
 ```
 
-The directory under `spec/` mirrors the proto package exactly, so a package
+The directory under `proto/` mirrors the proto package exactly, so a package
 name and a file path cannot disagree. The generated Go code in `gen/` is
 committed, as Go expects — `go get` and `go build` need nothing else. It is
 rebuilt by `make generate`, and CI fails if what is committed is not what
@@ -175,9 +175,9 @@ plugins are pinned by `go.mod` tool directives, so there is nothing else to
 install.
 
 ```sh
-make generate         # rebuild gen/ from spec/
+make generate         # rebuild gen/ from proto/
 make generate-check   # fail if gen/ is not what regeneration produces
-make breaking         # fail if spec/ breaks the contract published on main
+make breaking         # fail if proto/ breaks the contract published on main
 ```
 
 The server has reflection enabled, so it can be driven without a copy of the

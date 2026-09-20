@@ -1,11 +1,11 @@
 ## 1. Repository layout, and removing the prototype
 
-- [x] 1.1 Create `spec/` as the contract root, with the directory path under it mirroring the proto package exactly, so `spec/` is the sole `--proto_path` and a package name and a file path never disagree
+- [x] 1.1 Create `proto/` as the contract root, with the directory path under it mirroring the proto package exactly, so `proto/` is the sole `--proto_path` and a package name and a file path never disagree. `proto/` rather than `spec/`: it is what a buf user expects to find, and this repository already uses "specs" for the requirements under `openspec/`
 - [x] 1.2 Delete `q/`, `proto/q/` and `cmd/q/` in one commit, and drop the MongoDB driver from `go.mod`. The prototype shares no interface with what replaces it and marking messages read on send is the behaviour being fixed
 - [x] 1.3 Delete `pubsub/`, `proto/pubsub/` and `cmd/pubsub/` in the same commit — pub/sub imports `q` and `q/msg` and cannot outlive them — along with `scripts/` and the `Makefile`, which drove the deleted binaries, and rewrite `README.md` from the specs so the repository describes what is being built rather than what was deleted
 - [x] 1.4 Commit the generated Go code under `gen/`, which is the Go convention and what makes the module usable with `go get` alone — no `buf`, no plugins, no generation step before a build. Go is the only language this change generates into. The gate that keeps it honest is 4.3, not `.gitignore`
 
-## 2. The storage contract — `spec/kyu/storage/v1/storage.proto`
+## 2. The storage contract — `proto/kyu/storage/v1/storage.proto`
 
 - [x] 2.1 Declare `package kyu.storage.v1` and the `Storage` service with exactly the eight methods, and no more
 - [x] 2.2 Define `Item` with exactly `partition`, `id`, `position`, `value`, `hold_until` and `attempts`
@@ -19,7 +19,7 @@
 - [x] 2.9 Verify against `specs/storage-spi` that no identifier anywhere in the file names a queue, message, lease, delivery, acknowledgement or dead letter
 - [x] 2.10 State in the comments on `Delete` and `Release` that the expected attempt count is not an optimisation and not optional — a backend that ignores it lets a slow consumer destroy a message another consumer is processing, and nothing upstream can detect that it did
 
-## 3. The client contract — `spec/kyu/v1/kyu.proto`
+## 3. The client contract — `proto/kyu/v1/kyu.proto`
 
 - [x] 3.1 Declare `package kyu.v1` and the `Kyu` service with `CreateQueue`, `Enqueue`, `Dequeue`, `StreamingDequeue` and `Ack`
 - [x] 3.2 Define `CreateQueue` carrying hold duration and attempt ceiling, both optional and defaulted
@@ -30,8 +30,8 @@
 
 ## 4. Codegen
 
-- [x] 4.1 Add `buf.yaml` and `buf.gen.yaml` rooted at `spec/`, pinning plugin versions through `go.mod` tool directives
-- [x] 4.2 Add breaking-change detection against the previous commit for `spec/`, so a change to a published package is caught mechanically rather than by review
+- [x] 4.1 Add `buf.yaml` and `buf.gen.yaml` rooted at `proto/`, pinning plugin versions through `go.mod` tool directives
+- [x] 4.2 Add breaking-change detection against the previous commit for `proto/`, so a change to a published package is caught mechanically rather than by review
 - [x] 4.3 Add a `Makefile` target that regenerates and fails if the working tree changes, so a stale generation cannot be committed
 - [x] 4.4 Generate both packages and confirm the storage server interface and the client stubs compile
 

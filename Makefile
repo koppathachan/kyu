@@ -1,10 +1,10 @@
 # kyu
 #
 # Building and running need Go alone: the generated code in gen/ is committed.
-# buf is needed only to change a contract in spec/.
+# buf is needed only to change a contract in proto/.
 
-SPEC_DIR := spec
-GEN_DIR  := gen
+PROTO_DIR := proto
+GEN_DIR   := gen
 
 .PHONY: build
 build: ## Build every binary
@@ -23,8 +23,8 @@ run-engine: ## Run the engine
 	go run ./cmd/kyu-engine
 
 .PHONY: generate
-generate: ## Regenerate gen/ from the contracts in spec/
-	cd $(SPEC_DIR) && buf generate
+generate: ## Regenerate gen/ from the contracts in proto/
+	cd $(PROTO_DIR) && buf generate
 
 .PHONY: generate-check
 generate-check: generate ## Fail if gen/ is not what regeneration produces (a CI gate)
@@ -38,11 +38,11 @@ generate-check: generate ## Fail if gen/ is not what regeneration produces (a CI
 
 .PHONY: lint-proto
 lint-proto: ## Lint the contracts
-	cd $(SPEC_DIR) && buf lint
+	cd $(PROTO_DIR) && buf lint
 
 .PHONY: breaking
-breaking: ## Fail if spec/ breaks the contract published on main
-	buf breaking $(SPEC_DIR) --against '.git#branch=main,subdir=spec'
+breaking: ## Fail if proto/ breaks the contract published on main
+	buf breaking $(PROTO_DIR) --against '.git#branch=main,subdir=proto'
 
 .PHONY: help
 help: ## List targets

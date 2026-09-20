@@ -1,4 +1,4 @@
-# spec/ is the contract root and the sole proto path: the directory under it
+# proto/ is the contract root and the sole proto path: the directory under it
 # mirrors the proto package exactly, so a package name and a file path cannot
 # disagree.
 version: v2
