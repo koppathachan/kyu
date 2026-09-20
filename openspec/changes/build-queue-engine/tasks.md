@@ -3,7 +3,7 @@
 - [ ] 1.1 Create `spec/` as the contract root, with the directory path under it mirroring the proto package exactly, so `spec/` is the sole `--proto_path` and a package name and a file path never disagree
 - [x] 1.2 Delete `q/`, `proto/q/` and `cmd/q/` in one commit, and drop the MongoDB driver from `go.mod`. The prototype shares no interface with what replaces it and marking messages read on send is the behaviour being fixed
 - [x] 1.3 Delete `pubsub/`, `proto/pubsub/` and `cmd/pubsub/` in the same commit — pub/sub imports `q` and `q/msg` and cannot outlive them — along with `scripts/` and the `Makefile`, which drove the deleted binaries, and rewrite `README.md` from the specs so the repository describes what is being built rather than what was deleted
-- [ ] 1.4 Add `.gitignore` entries for generated code in both languages, and verify nothing generated is committed
+- [ ] 1.4 Add `.gitignore` entries for generated Go code — Go is the only language this change generates into — and verify nothing generated is committed
 
 ## 2. The storage contract — `spec/kyu/storage/v1/storage.proto`
 
@@ -104,4 +104,4 @@
 - [ ] 11.2 Run that test through both the unary and the streaming form
 - [ ] 11.3 Run it against the reference storage server over gRPC on a real socket, never in-process
 - [ ] 11.4 Add `make run` targets for the engine and the reference storage server, and a README section showing a queue being driven end to end from a cold start
-- [ ] 11.5 Record in the README that a deployment must supply a storage server, that the in-memory one is not one, and that the SPI is what a deployment implements
+- [x] 11.5 Record in the README that a deployment must supply a storage server, that the reference in-memory one is not one, and that `kyu.storage.v1.Storage` is what a deployment implements

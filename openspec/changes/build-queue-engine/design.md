@@ -281,6 +281,12 @@ staleness window is stated in the spec rather than left to whoever writes the
 cache. A longer TTL would buy nothing; the case it defends against is a tight
 retry loop, which five seconds already absorbs.
 
+Creating a queue drops any absence remembered for that name. The TTL covers
+absences contradicted by another replica, which is a race; an absence
+contradicted by this replica's own `CreateQueue` is not a race, and waiting
+five seconds to notice would be a client being refused a queue by the engine
+that just created it.
+
 ### A partition's settings are an opaque value
 
 Per-queue policy — hold duration, attempt ceiling — has to be durable, because

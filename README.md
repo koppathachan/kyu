@@ -143,7 +143,8 @@ Planned, and not yet present: `spec/` as the contract root, holding
 `spec/kyu/v1/kyu.proto` and `spec/kyu/storage/v1/storage.proto`; the engine;
 a reference in-memory storage server; and their binaries. Anyone deploying
 kyu will need to run a storage server or write one — there is no embedded
-default.
+default, and the reference server is a test fixture and a worked example, not
+a production backend.
 
 ## License
 

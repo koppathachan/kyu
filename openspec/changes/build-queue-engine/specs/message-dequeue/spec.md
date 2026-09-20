@@ -3,11 +3,13 @@
 ### Requirement: [ENGINE] A message leaves a queue only when it is acknowledged
 The engine SHALL call `Delete` for a message when, and only when, a consumer acknowledges it. No other event SHALL cause a message to be deleted.
 
-Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` may be refused in either of two ways, and both mean the same thing to the consumer: the message is no longer its to settle. `FAILED_PRECONDITION` means the hold lapsed and the message passed to another consumer. `NOT_FOUND` means the hold lapsed, the message had already spent its attempts, and the reaper moved it to the dead letter partition.
+Every such `Delete` SHALL name the hold it settles, using the attempt count returned by the claim that delivered the message. A `Delete` may be refused in either of two ways, and both mean the same thing to the consumer: the message is no longer its to settle. `FAILED_PRECONDITION` means the hold lapsed and the message passed to another consumer. `NOT_FOUND` means the message is no longer in the queue, which has two causes: the reaper moved it to the dead letter partition after its attempts ran out, or an earlier acknowledgement of the same message already deleted it and this one is a repeat. The engine SHALL NOT claim to tell them apart. There is no read by id in the SPI, so no call it can make would say which happened.
 
 Both refusals are ordinary for the engine and SHALL NOT be reported as faults. Both SHALL be reported to the consumer, which asked for something that did not happen. `Ack` SHALL fail with `ABORTED`. On a stream, the engine SHALL send a settlement rejection naming the message. Telling the consumer `OK` would tell it that it had settled a message another consumer is at that moment still processing, or that it had settled one sitting in a dead letter queue.
 
-The second case is the one recorded under Risks in `design.md`: a consumer slow rather than dead can have its message transferred while it works, and no fence closes that. The engine cannot keep the work; it can refuse to pretend the work landed.
+The dead letter case is the one recorded under Risks in `design.md`: a consumer slow rather than dead can have its message transferred while it works, and no fence closes that. The engine cannot keep the work; it can refuse to pretend the work landed.
+
+A repeated acknowledgement therefore receives `ABORTED` although its work did land and its message is gone. That is the deliberate direction to be wrong in. This queue is at-least-once, so a consumer told `ABORTED` may repeat work it had already finished — which the contract already permits, and which is what a lost response would have caused anyway. A consumer told `OK` for a message sitting in `.dlq` would instead be told a guarantee that was not kept. `ABORTED` is never a claim that a settlement happened when it did not.
 
 `ABORTED` and not `FAILED_PRECONDITION`: this is a concurrency conflict, and `FAILED_PRECONDITION` is the status a client receives for a queue whose settings this engine cannot read — an unrelated condition calling for an unrelated response.
 
@@ -18,6 +20,10 @@ The second case is the one recorded under Risks in `design.md`: a consumer slow 
 #### Scenario: A consumer is told when its message was dead lettered under it
 - **WHEN** a consumer acknowledges a message the reaper moved to the dead letter partition while it was still working
 - **THEN** the `Delete` returns `NOT_FOUND`, and the consumer is told `ABORTED` rather than `OK`
+
+#### Scenario: A repeated acknowledgement is refused rather than confirmed
+- **WHEN** a consumer acknowledges a message, the acknowledgement succeeds, and the same acknowledgement is sent again
+- **THEN** the second `Delete` returns `NOT_FOUND` and the consumer is told `ABORTED`, because nothing in the SPI distinguishes its own earlier settlement from a dead letter transfer
 
 #### Scenario: An unacknowledged message is not deleted
 - **WHEN** a consumer receives a message and never acknowledges it

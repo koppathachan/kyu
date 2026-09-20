@@ -69,6 +69,8 @@ The engine SHALL NOT infer a queue's absence from its own memory. Queues are cre
 
 The engine MAY remember that a name was absent, to keep a client looping on a misspelled queue from issuing one `ListPartitions` per call. Such an entry SHALL expire after a bounded, configurable interval, and that interval SHALL be short.
 
+An engine that creates a queue SHALL discard any absence it remembers for that name, as part of creating it. Without that, a client told `NOT_FOUND` for a queue, which then creates it through that same instance and enqueues to it, is refused by the very engine that just created it — a failure with no race in it at all, visible to a single client talking to a single replica.
+
 An absence MAY therefore be served stale for at most that interval: a queue created on another replica just after this one answered `NOT_FOUND` for it stays absent here until the entry expires. That is the same failure this requirement exists to prevent, re-introduced in miniature, which is why the interval is bounded, short and stated rather than left to an implementation.
 
 #### Scenario: A queue created on another replica is served
@@ -82,6 +84,10 @@ An absence MAY therefore be served stale for at most that interval: a queue crea
 #### Scenario: Discovery does not override an unreadable queue
 - **WHEN** discovery finds a queue whose settings this engine cannot decode
 - **THEN** the call fails with `FAILED_PRECONDITION`, no sweep is started for it, and it is reported by name
+
+#### Scenario: Creating a queue clears its remembered absence
+- **WHEN** a client is told a queue is absent, creates it through that same engine instance, and enqueues to it immediately
+- **THEN** the enqueue is served, and the remembered absence does not refuse it
 
 #### Scenario: A remembered absence does not outlive its interval
 - **WHEN** a client is told a queue is absent, the queue is then created through another engine instance, and the client retries after the negative-cache interval

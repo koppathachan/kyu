@@ -29,7 +29,7 @@ Whether kyu offers pub/sub again is a question for a later change.
 
 - **Two contracts, one root.** `spec/kyu/v1/kyu.proto` is what applications
   call. `spec/kyu/storage/v1/storage.proto` is what deployments implement.
-  Neither language commits generated code; `spec/` is the sole proto path.
+  Generated code is not committed; `spec/` is the sole proto path.
 
 - **The storage SPI is eight operations over opaque items** and names no queue
   concept anywhere in it. It stores items in partitions. Every queue idea —
@@ -117,12 +117,16 @@ None. `openspec/specs/` is empty.
 ## Impact
 
 - **Removed**: `q/`, `proto/q/`, `cmd/q/`, and with them `pubsub/`,
-  `proto/pubsub/`, `cmd/pubsub/`, which imported them. Also `scripts/` and the
-  `Makefile`, which drove the deleted binaries. The MongoDB dependency leaves
-  with the queue path, and `go.mod` is left with no requirements at all.
+  `proto/pubsub/`, `cmd/pubsub/`, which imported them, and `scripts/`. The
+  MongoDB dependency leaves with the queue path, and `go.mod` is left with no
+  requirements at all.
+- **Replaced**: the `Makefile`, deleted along with the binaries it drove and
+  reintroduced by this change with targets for regeneration and for running
+  the engine and the reference server.
 - **Added**: `spec/` as the contract root; a `buf` codegen pipeline; the
   engine, the reference storage server and their binaries.
-- **Untouched**: `LICENSE`, `.gitignore`, and the module path.
+- **Edited**: `.gitignore`, for generated Go code.
+- **Untouched**: `LICENSE` and the module path.
 - **Toolchain**: Go 1.26, `buf` 1.50, `protoc` 36.1 — all already present.
 - **CI**: two new gates — `buf` breaking-change detection against the previous
   commit for `spec/`, and a codegen-drift check that fails if regeneration
