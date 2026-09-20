@@ -24,7 +24,7 @@ The following statuses SHALL be used with these meanings and no others.
 | `INVALID_ARGUMENT` | The request is malformed or names a reserved name |
 | `NOT_FOUND` | The named partition, queue or item does not exist |
 | `ALREADY_EXISTS` | A partition or queue of that name is already present |
-| `FAILED_PRECONDITION` | The target exists, but not in the state the caller named — a settlement for a hold that has passed on |
+| `FAILED_PRECONDITION` | The target exists, but not in the state the caller named — a settlement for a hold that has passed on, or a queue whose settings this engine cannot read |
 | `UNIMPLEMENTED` | The backend does not serve this contract |
 | `UNAVAILABLE` | The backend could not be reached or could not serve the call |
 | `INTERNAL` | The backend failed in a way it does not attribute to the request |

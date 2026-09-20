@@ -45,15 +45,17 @@
 - [ ] 5.6 Give it a `cmd/` binary and a listen address, so the engine reaches it over real gRPC rather than in-process
 - [ ] 5.7 Label it in its package documentation as a reference and a test fixture, not a production backend
 - [ ] 5.8 Implement the attempt-count fence on `Delete` and `Release` inside the same critical section as the read that checks it, and test it directly: a settlement naming a stale attempt count is refused with `FAILED_PRECONDITION` and changes nothing
+- [ ] 5.9 Implement `Put`'s duplicate-id and missing-partition refusals, and `Move`'s refusal when the destination already holds that id
 
 ## 6. Engine — provisioning and enqueue
 
 - [ ] 6.1 Build the engine's storage client: a thin wrapper over the generated stubs holding the connection and nothing else, with no backend-specific behaviour anywhere in it
 - [ ] 6.2 Implement `CreateQueue` issuing two `CreatePartition` calls with the same settings value, failing the whole call if the companion cannot be created
-- [ ] 6.2a Implement the settings codec: encode hold duration and attempt ceiling into the opaque value on the way out, decode on the way back from `ListPartitions`, and reject a value this engine cannot decode rather than falling back to defaults
+- [ ] 6.2a Implement the settings codec: encode hold duration and attempt ceiling into the opaque value on the way out, decode on the way back from `ListPartitions`. Never fall back to defaults on a value that will not decode — the whole point of storing the ceiling is that guessing it risks delivering past a limit
+- [ ] 6.2b Implement the undecodable-settings outcome: refuse to serve that queue with `FAILED_PRECONDITION`, start no sweep for it, report it by name, and keep serving every other queue. One queue written by a newer engine must not take the deployment down
 - [ ] 6.3 Enforce the reserved `.dlq` suffix on every client-supplied queue name, in `CreateQueue` and `Enqueue`
 - [ ] 6.4 Implement `Enqueue`, assigning the message id engine-side and returning storage's position
-- [ ] 6.5 Add the position-monotonicity check at `Put`, not at `Claim`: record the highest position already completed for that partition when a `Put` is issued, and report a violation if the response comes back lower, naming the backend, the partition and both positions. Report and continue serving — taking a queue out of service converts an ordering fault we cannot fix into an outage we caused. A check at `Claim` would be wrong: redelivery legitimately returns a lower position than messages claimed since, so it would fire on every retry, including in task 11.1
+- [ ] 6.5 Add the position-monotonicity check at `Put`, not at `Claim`: record the highest position already completed for that partition when a `Put` is issued, and report a violation if the response comes back lower, naming the backend, the partition and both positions. The high-water mark is in-memory and best-effort — it resets on restart, and no SPI call is to be added to make it durable. Report and continue serving; taking a queue out of service converts an ordering fault we cannot fix into an outage we caused. A check at `Claim` would be wrong: redelivery legitimately returns a lower position than messages claimed since, so it would fire on every retry, including in task 11.1
 - [ ] 6.6 Tests: both partitions created; reserved names refused; `ALREADY_EXISTS` on a repeat; settings read back through `ListPartitions` after a restart
 
 ## 7. Engine — lease and unary dequeue
@@ -76,12 +78,12 @@
 
 ## 9. Engine — dead letter transfer and the reaper
 
-- [ ] 9.1 Pass the queue's attempt ceiling on every `Claim`, so a message at the ceiling is undeliverable before any transfer occurs — this is what removes the reaper from the correctness path and the race between the reaper and a consumer
-- [ ] 9.2 Implement the transfer: `Move` to `<queue>.dlq`, preserving id, payload and attempt count, issuing no `Delete`
+- [ ] 9.1 Pass the queue's attempt ceiling on every `Claim`, so a message at the ceiling is undeliverable before any transfer occurs — this is what removes the reaper from the correctness path. It does not remove the race between the reaper and a consumer, which is not closable here; see the risk in `design.md`, and do not write the opposite into any comment
+- [ ] 9.2 Implement the transfer: `Move` to `<queue>.dlq`, preserving id, payload and attempt count, issuing no `Delete`. Treat `ALREADY_EXISTS` from the destination as a defect to report, not an ordinary outcome — it means two messages share an id
 - [ ] 9.3 Implement the per-queue sweep: `Scan` for lapsed holds with attempts at or above the ceiling, with an explicit limit defaulting to 100, and `Move` each result. Never send `Scan` without a limit — the backend would be choosing the reaper's throughput
 - [ ] 9.4 Start a sweep at `CreateQueue`, and at startup for every partition from `ListPartitions`; start none for a partition ending in `.dlq`
 - [ ] 9.5 Implement jitter on the initial offset and exponential backoff between the configured floor and ceiling, resetting to the floor on any non-empty scan
-- [ ] 9.6 Read `KYU_SWEEP_INTERVAL` and `KYU_SWEEP_INTERVAL_MAX`, with flag overrides
+- [ ] 9.6 Read `KYU_SWEEP_INTERVAL`, `KYU_SWEEP_INTERVAL_MAX` and `KYU_SCAN_LIMIT`, with flag overrides
 - [ ] 9.7 Treat `NOT_FOUND` from `Move` as an ordinary outcome and continue
 - [ ] 9.8 Tests: a message reaching the ceiling is moved with no consumer present; sweeps resume after restart; no sweep runs for a `.dlq`; correctness holds with the reaper disabled — no message is delivered past its ceiling; two engines sweeping one queue leave the message present exactly once
 

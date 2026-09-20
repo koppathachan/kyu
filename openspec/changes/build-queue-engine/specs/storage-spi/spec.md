@@ -78,7 +78,9 @@ When no item is eligible, the call SHALL succeed and return no item. This is not
 
 Both halves SHALL take effect together or neither SHALL. An implementation SHALL NOT expose a state in which the item is absent from both partitions, and SHALL NOT leave it present in both.
 
-When the item is not in the source, the call SHALL fail with `NOT_FOUND` and SHALL change nothing.
+When the item is not in the source, the call SHALL fail with `NOT_FOUND` and SHALL change nothing. When an item of that id is already present in the destination, the call SHALL fail with `ALREADY_EXISTS` and SHALL change nothing.
+
+An id is preserved across a move, so a destination already holding that id would otherwise end up with two items the engine cannot tell apart. Unreachable while messages only ever move one way; reachable the moment anything moves one back.
 
 #### Scenario: A failed move leaves the item where it was
 - **WHEN** a move cannot be completed
@@ -87,6 +89,10 @@ When the item is not in the source, the call SHALL fail with `NOT_FOUND` and SHA
 #### Scenario: The attempt count survives the move
 - **WHEN** an item with an attempt count of five is moved
 - **THEN** the item in the destination carries an attempt count of five
+
+#### Scenario: A colliding id in the destination is refused
+- **WHEN** `Move` names an id already present in the destination partition
+- **THEN** the call fails with `ALREADY_EXISTS` and neither partition is modified
 
 #### Scenario: Moving an item that is gone is reported, not guessed
 - **WHEN** `Move` names an id absent from the source partition
@@ -201,13 +207,19 @@ A check at `Claim` would be wrong. A claimed position lower than one claimed bef
 ### Requirement: [ENGINE] The engine reaches storage through the SPI and through nothing else
 The engine SHALL obtain every durable fact about a queue through the eight SPI operations. It SHALL NOT hold a connection, handle, transaction or configuration belonging to a storage implementation, SHALL NOT branch on the identity of the backend it is talking to, and SHALL NOT keep durable state anywhere else.
 
-State the engine holds in memory SHALL be reconstructible from the SPI after a restart.
+State the engine holds in memory SHALL be reconstructible from the SPI after a restart, with one exception: purely diagnostic state that affects no queue's behaviour MAY be lost. The position high-water mark the engine keeps in order to detect a backend violating the ordering requirement is such state.
+
+Ordering detection is therefore best-effort, and resumes from the first `Put` to each partition after a restart. No SPI operation SHALL be added to make it durable — a diagnostic does not earn a place in the contract every deployment must implement.
 
 A single side channel, however small, converts a portable engine into one that works properly against the backend it was developed against.
 
 #### Scenario: No backend-specific behaviour
 - **WHEN** the engine's source is examined for a branch on backend identity, type or capability
 - **THEN** none is present
+
+#### Scenario: A diagnostic may be forgotten across a restart
+- **WHEN** the engine restarts
+- **THEN** ordering detection resumes from the first `Put` to each partition, and no queue's behaviour differs
 
 #### Scenario: Restart loses nothing durable
 - **WHEN** the engine is stopped and started while messages are enqueued and held

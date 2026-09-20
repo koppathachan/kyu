@@ -59,3 +59,18 @@ The reaper needs a queue's attempt ceiling to decide what to move, and must keep
 #### Scenario: Storage does not interpret what it stores
 - **WHEN** a partition's settings value is inspected in a backend
 - **THEN** the backend stores and returns it unchanged, and no field of the SPI names a hold duration or an attempt ceiling
+
+### Requirement: [ENGINE] A queue whose settings the engine cannot read is not served
+When `ListPartitions` returns a settings value this engine cannot decode, the engine SHALL NOT serve that queue: it SHALL NOT claim from it, SHALL NOT sweep it, and SHALL fail client calls naming it with `FAILED_PRECONDITION`. It SHALL report the queue by name, and SHALL continue serving every queue it can read.
+
+This is not the same judgement as an ordering violation, which is reported while service continues. There the engine knows what the queue's policy is and can still honour it; here it does not know the attempt ceiling, so claiming would risk delivering past a limit it cannot see. Refusing is forced rather than chosen.
+
+Serving the remaining queues matters: one queue written by a newer engine should not take down every other queue in the deployment.
+
+#### Scenario: An unreadable queue is refused, not guessed at
+- **WHEN** `ListPartitions` returns a settings value the engine cannot decode
+- **THEN** calls naming that queue fail with `FAILED_PRECONDITION`, no claim or sweep is issued against it, and the queue is named in what the engine reports
+
+#### Scenario: One unreadable queue does not stop the others
+- **WHEN** one queue's settings cannot be decoded and others can
+- **THEN** every other queue is served and swept normally

@@ -126,9 +126,13 @@ exchange for a capability nothing in the engine wants.
 `Claim`. Equal in strength, and it obliges every backend to mint and store a
 unique value. The attempt count is already there and already unique per hold.
 
-*Not applied to `Move`:* the sweep moves only messages at the attempt ceiling,
-which `Claim` refuses to return, so no consumer can be holding one. Two sweeps
-racing resolve through `NOT_FOUND`.
+*Not applied to `Move`:* not because the message is safe — it is not. A message
+reaches the attempt ceiling under a live hold, so the reaper can move it out
+from under a consumer that is slow rather than dead. No fence closes that:
+attempts do not change while a message is held, so nothing distinguishes a
+lapsed hold from a consumer still working under one. `Move` carries no fence
+because none would help, and the exposure is recorded under Risks rather than
+argued away. Two sweeps racing each other resolve through `NOT_FOUND`.
 
 ### A partition's settings are an opaque value
 
@@ -250,11 +254,12 @@ reaper learns thresholds from the call it was already making.
 
 | Setting | Default | Where |
 |---|---|---|
-| hold duration | 30s | per queue, overridable per dequeue |
+| hold duration | 30s | per queue, at creation — deliberately not per dequeue |
 | attempt ceiling | 5 | per queue, at creation |
 | in-flight limit | 1 | per stream, in `Open` |
 | sweep floor | 1s | `KYU_SWEEP_INTERVAL`, engine-wide |
 | sweep ceiling | 30s | `KYU_SWEEP_INTERVAL_MAX`, engine-wide |
+| scan limit | 100 | `KYU_SCAN_LIMIT`, engine-wide |
 
 Thirty seconds of hold is a compromise: it is the recovery time after an
 engine crash, which argues shorter, and the budget a slow consumer gets
