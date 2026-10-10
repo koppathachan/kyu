@@ -24,9 +24,12 @@ no retry and no dead letters.
 Not here yet: consuming or inspecting a dead letter queue, redrive, priorities,
 retention, deduplication, delayed delivery, and any judgement of a third-party
 storage implementation. See the non-goals in
-[`design.md`](openspec/changes/build-queue-engine/design.md).
+[`design.md`](openspec/changes/archive/2026-10-10-build-queue-engine/design.md).
 
-The specification is in [`openspec/changes/build-queue-engine/`](openspec/changes/build-queue-engine/).
+The specification is in [`openspec/specs/`](openspec/specs/), one directory per
+capability. The change that produced it — proposal, design and task list — is
+archived in
+[`openspec/changes/archive/2026-10-10-build-queue-engine/`](openspec/changes/archive/2026-10-10-build-queue-engine/).
 
 ## The shape of it
 
@@ -157,12 +160,12 @@ scripts/                 build scripts
 
 openspec/
   config.yaml            the layout and conventions above, for this workflow
-  changes/build-queue-engine/
-    proposal.md          why this change exists and what it changes
-    design.md            the decisions, their alternatives, the diagrams
-    specs/<capability>/  requirements and scenarios, one per capability
-    tasks.md             the implementation checklist
-  specs/                 accepted specifications (empty until the first archive)
+  specs/<capability>/    accepted requirements and scenarios, one per capability
+  changes/archive/
+    2026-10-10-build-queue-engine/
+      proposal.md        why the change existed and what it changed
+      design.md          the decisions, their alternatives, the diagrams
+      tasks.md           the implementation checklist, all done
 ```
 
 The directory under `api/` mirrors the proto package exactly, so a package
