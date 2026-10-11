@@ -25,6 +25,9 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/kyu /kyu
+# The binary links third-party code whose licenses require their notices to
+# travel with it.
+COPY LICENSE THIRD_PARTY_NOTICES /usr/share/doc/kyu/
 
 ENV KYU_LISTEN=0.0.0.0:50051
 EXPOSE 50051

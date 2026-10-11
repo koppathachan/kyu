@@ -41,6 +41,21 @@ fmt-check: ## Fail if any Go file is not gofmt-formatted
 tidy-check: ## Fail if go.mod or go.sum is not what 'go mod tidy' produces
 	go mod tidy -diff
 
+.PHONY: notices
+notices: ## Regenerate THIRD_PARTY_NOTICES from what the binaries link
+	./scripts/third-party-notices.sh
+
+.PHONY: notices-check
+notices-check: ## Fail if THIRD_PARTY_NOTICES is not what regeneration produces (a CI gate)
+	@./scripts/third-party-notices.sh THIRD_PARTY_NOTICES.check; \
+	if ! cmp -s THIRD_PARTY_NOTICES THIRD_PARTY_NOTICES.check; then \
+		rm -f THIRD_PARTY_NOTICES.check; \
+		echo "THIRD_PARTY_NOTICES is stale: a dependency the binaries link has changed."; \
+		echo "run 'make notices' and commit the result"; \
+		exit 1; \
+	fi; \
+	rm -f THIRD_PARTY_NOTICES.check
+
 .PHONY: run-memstore
 run-memstore: ## Run the reference storage server (a fixture, not a backend)
 	go run ./cmd/kyu-memstore -listen $(STORAGE_ADDR)

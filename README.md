@@ -433,3 +433,9 @@ without publishing; it needs [`goreleaser`](https://goreleaser.com).
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The binaries also contain the Go runtime and libraries under BSD-3-Clause and
+Apache-2.0, whose notices are in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)
+and ship in every archive, package and image beside `LICENSE`. The file is
+generated from what the binaries link (`make notices`), and CI fails if it
+falls out of date.

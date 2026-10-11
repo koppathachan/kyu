@@ -19,3 +19,4 @@ bin/
 
 # GoReleaser output
 dist/
+THIRD_PARTY_NOTICES.check

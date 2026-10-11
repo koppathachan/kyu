@@ -45,6 +45,7 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
+      - THIRD_PARTY_NOTICES
       - README.md
       - docs/architecture.md
 
@@ -67,6 +68,10 @@ nfpms:
     license: MIT
     bindir: /usr/bin
     contents:
+      - src: LICENSE
+        dst: /usr/share/doc/kyu/LICENSE
+      - src: THIRD_PARTY_NOTICES
+        dst: /usr/share/doc/kyu/THIRD_PARTY_NOTICES
       - src: init/kyu.service
         dst: /usr/lib/systemd/system/kyu.service
       - src: init/kyu.env
@@ -89,6 +94,11 @@ nfpms:
       for tests, not for production.
     license: MIT
     bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/kyu-memstore/LICENSE
+      - src: THIRD_PARTY_NOTICES
+        dst: /usr/share/doc/kyu-memstore/THIRD_PARTY_NOTICES
 
 homebrew_casks:
   - name: kyu
