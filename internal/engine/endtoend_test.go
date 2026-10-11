@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/queue"
-	kyuv1 "github.com/sasidakh/kyu/kyu/v1"
+	"github.com/koppathachan/kyu/internal/queue"
+	kyuv1 "github.com/koppathachan/kyu/kyu/v1"
 )
 
 // consumer is one of the two dequeue forms, so that the whole journey below

@@ -55,12 +55,22 @@ jobs:
       # Compared against the commit this change is built on: the base of a
       # pull request, or the tip of main before a push. A push that creates
       # the branch has no previous tip, and is not compared.
+      #
+      # A break that is intended is declared, not hidden: a commit in the range
+      # carrying a "Breaking-Change: <why>" trailer skips the comparison, and
+      # the reason is printed here so the log records it.
       - name: make breaking
         env:
           AGAINST: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [ -z "$AGAINST" ] || [ "$AGAINST" = "0000000000000000000000000000000000000000" ]; then
             echo "no previous commit to compare against"
+            exit 0
+          fi
+          declared=$(git log --format=%B "$AGAINST..HEAD" | grep -i '^Breaking-Change:' || true)
+          if [ -n "$declared" ]; then
+            echo "breaking change declared, comparison skipped:"
+            echo "$declared"
             exit 0
           fi
           make breaking BREAKING_AGAINST=".git#ref=$AGAINST"

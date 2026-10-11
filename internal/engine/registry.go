@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/queue"
 )
 
 // registry is what this engine knows about queues, and what it is doing about

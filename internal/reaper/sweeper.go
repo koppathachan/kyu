@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/queue"
-	"github.com/sasidakh/kyu/internal/spi"
+	"github.com/koppathachan/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/spi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

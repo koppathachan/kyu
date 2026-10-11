@@ -1,4 +1,4 @@
-module github.com/sasidakh/kyu
+module github.com/koppathachan/kyu
 
 go 1.27
 

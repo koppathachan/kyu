@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/reaper"
+	"github.com/koppathachan/kyu/internal/reaper"
 )
 
 // Engine-wide defaults. Per-queue policy — hold duration and attempt ceiling —

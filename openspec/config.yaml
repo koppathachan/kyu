@@ -7,7 +7,7 @@ context: |
   semantics are written once, in an engine kyu ships; durability is written by
   whoever deploys it, behind a gRPC interface they implement themselves.
 
-  Go 1.27, single module, github.com/sasidakh/kyu. gRPC and Protocol Buffers,
+  Go 1.27, single module, github.com/koppathachan/kyu. gRPC and Protocol Buffers,
   generated with buf. No third-party runtime dependencies beyond grpc and
   protobuf.
 

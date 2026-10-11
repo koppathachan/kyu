@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	storagev1 "github.com/sasidakh/kyu/kyu/storage/v1"
+	storagev1 "github.com/koppathachan/kyu/kyu/storage/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

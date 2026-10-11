@@ -1112,7 +1112,7 @@ const file_kyu_storage_v1_storage_proto_rawDesc = "" +
 	"\aRelease\x12\x1e.kyu.storage.v1.ReleaseRequest\x1a\x1f.kyu.storage.v1.ReleaseResponse\x12G\n" +
 	"\x06Delete\x12\x1d.kyu.storage.v1.DeleteRequest\x1a\x1e.kyu.storage.v1.DeleteResponse\x12A\n" +
 	"\x04Move\x12\x1b.kyu.storage.v1.MoveRequest\x1a\x1c.kyu.storage.v1.MoveResponse\x12A\n" +
-	"\x04Scan\x12\x1b.kyu.storage.v1.ScanRequest\x1a\x1c.kyu.storage.v1.ScanResponseB2Z0github.com/sasidakh/kyu/kyu/storage/v1;storagev1b\x06proto3"
+	"\x04Scan\x12\x1b.kyu.storage.v1.ScanRequest\x1a\x1c.kyu.storage.v1.ScanResponseB6Z4github.com/koppathachan/kyu/kyu/storage/v1;storagev1b\x06proto3"
 
 var (
 	file_kyu_storage_v1_storage_proto_rawDescOnce sync.Once

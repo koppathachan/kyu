@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/engine"
+	"github.com/koppathachan/kyu/internal/engine"
 )
 
 func TestConfigReadsTheEnvironment(t *testing.T) {

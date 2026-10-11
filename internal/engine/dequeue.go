@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/sasidakh/kyu/internal/queue"
-	storagev1 "github.com/sasidakh/kyu/kyu/storage/v1"
-	kyuv1 "github.com/sasidakh/kyu/kyu/v1"
+	"github.com/koppathachan/kyu/internal/queue"
+	storagev1 "github.com/koppathachan/kyu/kyu/storage/v1"
+	kyuv1 "github.com/koppathachan/kyu/kyu/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

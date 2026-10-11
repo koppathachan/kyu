@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sasidakh/kyu/internal/storage/memory"
-	storagev1 "github.com/sasidakh/kyu/kyu/storage/v1"
+	"github.com/koppathachan/kyu/internal/storage/memory"
+	storagev1 "github.com/koppathachan/kyu/kyu/storage/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

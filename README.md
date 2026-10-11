@@ -378,7 +378,9 @@ make breaking         # fail if api/ breaks the contract published on main
 pull request, along with `gofmt`, `go mod tidy`, `go vet`, the tests with
 `-race`, and both container image builds. On a pull request `breaking`
 compares against the pull request's base; on a push, against the previous tip
-of `main`.
+of `main`. A break that is intended is declared rather than hidden: a commit
+carrying a `Breaking-Change: <why>` trailer skips that comparison, and CI
+prints the reason.
 
 Container images are built per binary from `build/package/`:
 

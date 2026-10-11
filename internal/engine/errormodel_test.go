@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/engine"
-	kyuv1 "github.com/sasidakh/kyu/kyu/v1"
+	"github.com/koppathachan/kyu/internal/engine"
+	kyuv1 "github.com/koppathachan/kyu/kyu/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
