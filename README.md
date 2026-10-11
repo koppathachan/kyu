@@ -401,7 +401,7 @@ make lint-proto       # lint the contracts, and check their formatting
 make breaking         # fail if api/ breaks the contract published on main
 ```
 
-[CI](.github/workflows/ci.yml) runs all four on every push to `main` and every
+The [checks workflow](.github/workflows/checks.yml) runs all four on every push to `main` and every
 pull request, along with `gofmt`, `go mod tidy`, `go vet`, the tests with
 `-race`, and both container image builds. On a pull request `breaking`
 compares against the pull request's base; on a push, against the previous tip
@@ -422,7 +422,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The [release workflow](.github/workflows/release.yml) runs all of CI, then
+The [release workflow](.github/workflows/release.yml) runs every check a pull request must pass, then
 [GoReleaser](.goreleaser.yaml) builds the archives, checksums, Linux packages
 and Homebrew cask and publishes the GitHub Release, the images go to
 `ghcr.io`, and the Go module proxy is asked for the tag. A tag with a suffix,

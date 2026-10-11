@@ -1,28 +1,35 @@
-# CI runs the same make targets a developer runs locally, so that a red build
+# The checks every pull request, every push to main and every release must
+# pass. Each step is a make target a developer can run locally, so a red check
 # can be reproduced by typing what it typed.
 #
-#   go         formatting, module tidiness, vet, and the tests with -race
-#   contracts  proto lint and format, breaking-change detection, and the check
-#              that the committed kyu/ is what regeneration produces
-#   images     both container images build
-name: ci
+#   Go              formatting, module tidiness, third-party notices, vet, the
+#                   tests with -race, the build, and the release configuration
+#   Protobuf API    proto lint and format, the check that the committed kyu/ is
+#                   what regeneration produces, and breaking-change detection
+#   Docker images   both images build
+#
+# The main ruleset requires each job by its name, so renaming one means
+# updating the ruleset in the same change.
+name: checks
 
 on:
   push:
     branches: [main]
   pull_request:
-  # The release workflow runs CI first, so nothing is released that CI rejects.
+  # The release workflow runs these first, so nothing is released that they
+  # reject.
   workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: checks-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   go:
+    name: "Go: lint, test (race), build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -41,7 +48,8 @@ jobs:
           version: "~> v2"
           args: check
 
-  contracts:
+  proto:
+    name: "Protobuf API: lint, codegen, breaking changes"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -85,7 +93,8 @@ jobs:
           fi
           make breaking BREAKING_AGAINST=".git#ref=$AGAINST"
 
-  images:
+  docker:
+    name: "Docker images: build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

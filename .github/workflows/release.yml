@@ -1,6 +1,7 @@
 # A release is a pushed tag: git tag v0.1.0 && git push origin v0.1.0
 #
-#   checks    the whole of CI, so nothing is released that CI would reject
+#   checks    every check a pull request must pass, so nothing is released
+#             that main would reject
 #   packages  GoReleaser: archives, checksums, .deb/.rpm/.apk, the Homebrew
 #             cask, and the GitHub Release that carries them
 #   images    ghcr.io/koppathachan/kyu and kyu-memstore, linux/amd64 + arm64
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   checks:
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/checks.yml
 
   packages:
     needs: checks
