@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/reaper"
+	"github.com/koppathachan/kyu/internal/reaper"
 )
 
 func TestPolicyBacksOffAndSnapsBack(t *testing.T) {

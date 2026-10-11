@@ -15,7 +15,7 @@ package kyu.v1;
 
 import "google/protobuf/duration.proto";
 
-option go_package = "github.com/sasidakh/kyu/kyu/v1;kyuv1";
+option go_package = "github.com/koppathachan/kyu/kyu/v1;kyuv1";
 
 // Kyu is a message queue that runs on storage kyu does not implement.
 //

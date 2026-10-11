@@ -17,8 +17,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sasidakh/kyu/internal/engine"
-	kyuv1 "github.com/sasidakh/kyu/kyu/v1"
+	"github.com/koppathachan/kyu/internal/engine"
+	"github.com/koppathachan/kyu/internal/version"
+	kyuv1 "github.com/koppathachan/kyu/kyu/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -38,7 +39,13 @@ func run() error {
 		return err
 	}
 	cfg.RegisterFlags(flag.CommandLine)
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("kyu", version.String())
+		return nil
+	}
 
 	eng, err := engine.New(cfg)
 	if err != nil {
@@ -75,7 +82,7 @@ func run() error {
 		srv.GracefulStop()
 	}()
 
-	slog.Info("serving kyu.v1.Kyu", "address", lis.Addr().String(), "storage", cfg.StorageTarget)
+	slog.Info("serving kyu.v1.Kyu", "version", version.String(), "address", lis.Addr().String(), "storage", cfg.StorageTarget)
 	if err := srv.Serve(lis); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}

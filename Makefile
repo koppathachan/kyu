@@ -10,17 +10,51 @@ GEN_DIRS := kyu
 STORAGE_ADDR ?= 127.0.0.1:50052
 ENGINE_ADDR  ?= 127.0.0.1:50051
 
+# What `make breaking` compares api/ against. Locally that is main, which is
+# what a branch is about to change. CI overrides it with the commit a push or
+# pull request is built on, because on main itself `branch=main` is the tree
+# being checked and would compare it with itself.
+BREAKING_AGAINST ?= .git\#branch=main
+
 .PHONY: build
 build: ## Build every binary into bin/
 	./scripts/build.sh
 
 .PHONY: test
-test: ## Run the tests
-	go test ./...
+test: ## Run the tests, with the race detector
+	go test -race ./...
 
 .PHONY: vet
 vet: ## Vet the Go code
 	go vet ./...
+
+.PHONY: fmt-check
+fmt-check: ## Fail if any Go file is not gofmt-formatted
+	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \
+	if [ -n "$$unformatted" ]; then \
+		echo "not gofmt-formatted:"; echo "$$unformatted"; \
+		echo; echo "run 'gofmt -w' on them and commit the result"; \
+		exit 1; \
+	fi
+
+.PHONY: tidy-check
+tidy-check: ## Fail if go.mod or go.sum is not what 'go mod tidy' produces
+	go mod tidy -diff
+
+.PHONY: notices
+notices: ## Regenerate THIRD_PARTY_NOTICES from what the binaries link
+	./scripts/third-party-notices.sh
+
+.PHONY: notices-check
+notices-check: ## Fail if THIRD_PARTY_NOTICES is not what regeneration produces (a CI gate)
+	@./scripts/third-party-notices.sh THIRD_PARTY_NOTICES.check; \
+	if ! cmp -s THIRD_PARTY_NOTICES THIRD_PARTY_NOTICES.check; then \
+		rm -f THIRD_PARTY_NOTICES.check; \
+		echo "THIRD_PARTY_NOTICES is stale: a dependency the binaries link has changed."; \
+		echo "run 'make notices' and commit the result"; \
+		exit 1; \
+	fi; \
+	rm -f THIRD_PARTY_NOTICES.check
 
 .PHONY: run-memstore
 run-memstore: ## Run the reference storage server (a fixture, not a backend)
@@ -54,12 +88,21 @@ generate-check: generate ## Fail if kyu/ is not what regeneration produces (a CI
 	fi
 
 .PHONY: lint-proto
-lint-proto: ## Lint the contracts
+lint-proto: ## Lint the contracts, and fail if any is not buf-formatted
 	buf lint
+	buf format --diff --exit-code
 
 .PHONY: breaking
-breaking: ## Fail if api/ breaks the contract published on main
-	buf breaking --against '.git#branch=main'
+breaking: ## Fail if api/ breaks the contract it is compared against (BREAKING_AGAINST)
+	buf breaking --against '$(BREAKING_AGAINST)'
+
+.PHONY: release-check
+release-check: ## Validate the release configuration (needs goreleaser)
+	goreleaser check
+
+.PHONY: release-snapshot
+release-snapshot: ## Build every release artifact into dist/ without publishing (needs goreleaser)
+	goreleaser release --snapshot --clean
 
 .PHONY: help
 help: ## List targets

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/queue"
 )
 
 // Start begins the engine's background work: one sweep per queue, and the

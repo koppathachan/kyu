@@ -1,0 +1,101 @@
+# The checks every pull request, every push to main and every release must
+# pass. Each step is a make target a developer can run locally, so a red check
+# can be reproduced by typing what it typed.
+#
+#   Go              formatting, module tidiness, third-party notices, vet, the
+#                   tests with -race, the build, and the release configuration
+#   Protobuf API    proto lint and format, the check that the committed kyu/ is
+#                   what regeneration produces, and breaking-change detection
+#   Docker images   both images build
+#
+# The main ruleset requires each job by its name, so renaming one means
+# updating the ruleset in the same change.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The release workflow runs these first, so nothing is released that they
+  # reject.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: "Go: lint, test (race), build"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make fmt-check
+      - run: make tidy-check
+      - run: make notices-check
+      - run: make vet
+      - run: make test
+      - run: make build
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
+
+  proto:
+    name: "Protobuf API: lint, codegen, breaking changes"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # buf breaking reads the commit it compares against from local
+          # history, so the whole of it is needed.
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # buf is installed, not run by the action: the checks below are make
+      # targets, so CI and a developer's machine run the same commands.
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.50.0
+          setup_only: true
+      - run: make lint-proto
+      - run: make generate-check
+      # Compared against the commit this change is built on: the base of a
+      # pull request, or the tip of main before a push. A push that creates
+      # the branch has no previous tip, and is not compared.
+      #
+      # A break that is intended is declared, not hidden: a commit in the range
+      # carrying a "Breaking-Change: <why>" trailer skips the comparison, and
+      # the reason is printed here so the log records it. The match allows a
+      # list prefix, because a squash merge quotes each commit as "* subject"
+      # followed by its body.
+      - name: make breaking
+        env:
+          AGAINST: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$AGAINST" ] || [ "$AGAINST" = "0000000000000000000000000000000000000000" ]; then
+            echo "no previous commit to compare against"
+            exit 0
+          fi
+          declared=$(git log --format=%B "$AGAINST..HEAD" | grep -iE '^[[:space:]*-]*Breaking-Change:' || true)
+          if [ -n "$declared" ]; then
+            echo "breaking change declared, comparison skipped:"
+            echo "$declared"
+            exit 0
+          fi
+          make breaking BREAKING_AGAINST=".git#ref=$AGAINST"
+
+  docker:
+    name: "Docker images: build"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: make docker-image

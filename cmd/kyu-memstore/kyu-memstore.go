@@ -18,8 +18,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sasidakh/kyu/internal/storage/memory"
-	storagev1 "github.com/sasidakh/kyu/kyu/storage/v1"
+	"github.com/koppathachan/kyu/internal/storage/memory"
+	"github.com/koppathachan/kyu/internal/version"
+	storagev1 "github.com/koppathachan/kyu/kyu/storage/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -34,7 +35,13 @@ func main() {
 func run() error {
 	listen := flag.String("listen", envOr("KYU_STORAGE_LISTEN", "127.0.0.1:50052"),
 		"address to serve kyu.storage.v1.Storage on (env KYU_STORAGE_LISTEN)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("kyu-memstore", version.String())
+		return nil
+	}
 
 	lis, err := net.Listen("tcp", *listen)
 	if err != nil {
@@ -54,7 +61,7 @@ func run() error {
 	}()
 
 	slog.Warn("this is the reference storage server: everything it holds is in memory and is lost on exit")
-	slog.Info("serving kyu.storage.v1.Storage", "address", lis.Addr().String())
+	slog.Info("serving kyu.storage.v1.Storage", "version", version.String(), "address", lis.Addr().String())
 	if err := srv.Serve(lis); err != nil {
 		return fmt.Errorf("serve: %w", err)
 	}

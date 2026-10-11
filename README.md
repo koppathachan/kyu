@@ -31,7 +31,7 @@ capability. The change that produced it — proposal, design and task list — i
 archived in
 [`openspec/changes/archive/2026-10-10-build-queue-engine/`](openspec/changes/archive/2026-10-10-build-queue-engine/).
 
-## The shape of it
+## Architecture
 
 Two contracts, and one component in the middle that knows what a queue is:
 
@@ -58,10 +58,24 @@ Two contracts, and one component in the middle that knows what a queue is:
   └──────────────────────────────────────────────────────────────┘
 ```
 
-`kyu.v1.Kyu` is what applications call: `CreateQueue`, `Enqueue`, `Dequeue`,
-`StreamingDequeue`, `Ack`. `kyu.storage.v1.Storage` is what a deployment
-implements. Neither is a library: both are gRPC, so a backend can be written
-in any language.
+- **Applications** call `kyu.v1.Kyu`: `CreateQueue`, `Enqueue`, `Dequeue`,
+  `StreamingDequeue`, `Ack`.
+- **The engine** (`cmd/kyu`) implements every queue rule and reads the only
+  clock in the system. It keeps no durable state, so any number of replicas
+  can share one storage server, and a lease granted by one can be acknowledged
+  through another. Each replica runs a reaper that moves exhausted messages to
+  their dead letter queue.
+- **The storage server** implements `kyu.storage.v1.Storage`: eight
+  operations over opaque items in partitions. The deployment supplies it, and
+  it is given every queue decision as an argument rather than asked to make
+  one.
+
+Neither contract is a library: both are gRPC, so either side can be written in
+any language.
+
+The detailed version — packages, the engine's internals, each request's path
+through the system, concurrency, and what happens when each part fails — is in
+[`docs/architecture.md`](docs/architecture.md).
 
 ## What a queue does
 
@@ -156,7 +170,13 @@ internal/                the implementation; importable by nobody
 cmd/kyu/                 the engine binary
 cmd/kyu-memstore/        the reference storage server binary
 build/package/           a Dockerfile per binary
+init/                    the systemd unit and its environment file, for the Linux packages
 scripts/                 build scripts
+.github/workflows/       CI, and the release a tag triggers
+.goreleaser.yaml         what a release builds and publishes
+
+docs/
+  architecture.md        how kyu is built, in detail
 
 openspec/
   config.yaml            the layout and conventions above, for this workflow
@@ -172,8 +192,8 @@ The directory under `api/` mirrors the proto package exactly, so a package
 name and a file path cannot disagree, and generated code lands beside the
 package it belongs to: `api/kyu/v1/kyu.proto` produces `kyu/v1/kyu.pb.go`. It
 is committed, as Go expects — `go get` and `go build` need nothing else — and
-rebuilt by `make generate`, with CI failing if what is committed is not what
-regeneration produces.
+rebuilt by `make generate`; `make generate-check`, which CI runs, fails if what
+is committed is not what regeneration produces.
 
 Each package under `internal/` is a domain rather than a layer. `queue` holds
 the vocabulary and performs no I/O at all, so the rules the engine is built
@@ -186,8 +206,10 @@ through the exported API. The engine's tests drive it through `kyu.v1.Kyu` and
 read results through `kyu.storage.v1.Storage` — the two things a deployment
 actually has.
 
-Read `proposal.md` first, then `design.md` — the design carries the arguments
-and the diagrams — then the capability specs for the requirements themselves.
+For how the system works, read [`docs/architecture.md`](docs/architecture.md).
+For why it was built this way, read the archived `proposal.md` and then
+`design.md`, which carries the arguments and the alternatives rejected. For the
+requirements themselves, read the capability specs.
 
 ## Deploying it
 
@@ -204,6 +226,30 @@ holds everything in process memory: stop it and every message is gone. It
 exists so that the contract has a worked example and so that kyu's own tests
 run against a real backend over a real socket.
 
+## Installing it
+
+Every release is a tag, `v0.1.0` and on, published on the
+[releases page](https://github.com/koppathachan/kyu/releases). Each one
+carries the engine, `kyu`, and the reference storage server, `kyu-memstore`.
+
+| You want | Get it with |
+|---|---|
+| A container | `docker pull ghcr.io/koppathachan/kyu` — and `ghcr.io/koppathachan/kyu-memstore` — for `linux/amd64` and `linux/arm64` |
+| macOS or Linux, via Homebrew | `brew install --cask koppathachan/tap/kyu` |
+| Debian or Ubuntu | the `.deb` from the release: `sudo apt install ./kyu_<version>_linux_amd64.deb` |
+| Fedora, RHEL, Amazon Linux | the `.rpm` from the release: `sudo dnf install ./kyu_<version>_linux_amd64.rpm` |
+| Alpine | the `.apk` from the release: `sudo apk add --allow-untrusted ./kyu_<version>_linux_amd64.apk` |
+| A plain binary | the `.tar.gz` for your platform from the release, checked against `checksums.txt` |
+| From source | `go install github.com/koppathachan/kyu/cmd/kyu@latest` |
+| The generated clients, in Go | `go get github.com/koppathachan/kyu@latest`, then import `kyu/v1` or `kyu/storage/v1` |
+
+The Linux packages install `kyu` with a systemd unit that is not enabled,
+because kyu has no default backend. Set `KYU_STORAGE` in `/etc/kyu/kyu.env`,
+then `sudo systemctl enable --now kyu`. `kyu-memstore` is packaged separately
+and has no unit: it keeps everything in memory, so it is for trying kyu out.
+
+`kyu -version` reports the release a binary was built from.
+
 ## Running it
 
 Building and running need Go 1.27 and nothing else, because the generated
@@ -211,7 +257,7 @@ code is committed:
 
 ```sh
 make build        # build every binary into bin/
-make test         # run the tests
+make test         # run the tests, with the race detector
 make help         # every target
 ```
 
@@ -351,9 +397,17 @@ install.
 ```sh
 make generate         # rebuild kyu/ from api/
 make generate-check   # fail if kyu/ is not what regeneration produces
-make lint-proto       # lint the contracts
+make lint-proto       # lint the contracts, and check their formatting
 make breaking         # fail if api/ breaks the contract published on main
 ```
+
+The [checks workflow](.github/workflows/checks.yml) runs all four on every push to `main` and every
+pull request, along with `gofmt`, `go mod tidy`, `go vet`, the tests with
+`-race`, and both container image builds. On a pull request `breaking`
+compares against the pull request's base; on a push, against the previous tip
+of `main`. A break that is intended is declared rather than hidden: a commit
+carrying a `Breaking-Change: <why>` trailer skips that comparison, and CI
+prints the reason.
 
 Container images are built per binary from `build/package/`:
 
@@ -361,6 +415,27 @@ Container images are built per binary from `build/package/`:
 make docker-image
 ```
 
+### Cutting a release
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The [release workflow](.github/workflows/release.yml) runs every check a pull request must pass, then
+[GoReleaser](.goreleaser.yaml) builds the archives, checksums, Linux packages
+and Homebrew cask and publishes the GitHub Release, the images go to
+`ghcr.io`, and the Go module proxy is asked for the tag. A tag with a suffix,
+such as `v0.2.0-rc.1`, is published as a prerelease and does not move
+`latest`. `make release-snapshot` builds everything into `dist/` locally
+without publishing; it needs [`goreleaser`](https://goreleaser.com).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The binaries also contain the Go runtime and libraries under BSD-3-Clause and
+Apache-2.0, whose notices are in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)
+and ship in every archive, package and image beside `LICENSE`. The file is
+generated from what the binaries link (`make notices`), and CI fails if it
+falls out of date.

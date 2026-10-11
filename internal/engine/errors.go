@@ -3,7 +3,7 @@ package engine
 import (
 	"errors"
 
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/queue"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

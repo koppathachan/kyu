@@ -3,7 +3,7 @@ package queue_test
 import (
 	"testing"
 
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/queue"
 )
 
 // The high-water mark compares only against Puts that had already completed.

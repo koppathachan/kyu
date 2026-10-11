@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/queue"
 )
 
 func TestTheReservedSuffix(t *testing.T) {

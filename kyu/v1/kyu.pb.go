@@ -866,7 +866,7 @@ const file_kyu_v1_kyu_proto_rawDesc = "" +
 	"\aEnqueue\x12\x16.kyu.v1.EnqueueRequest\x1a\x17.kyu.v1.EnqueueResponse\x12:\n" +
 	"\aDequeue\x12\x16.kyu.v1.DequeueRequest\x1a\x17.kyu.v1.DequeueResponse\x12Y\n" +
 	"\x10StreamingDequeue\x12\x1f.kyu.v1.StreamingDequeueRequest\x1a .kyu.v1.StreamingDequeueResponse(\x010\x01\x12.\n" +
-	"\x03Ack\x12\x12.kyu.v1.AckRequest\x1a\x13.kyu.v1.AckResponseB&Z$github.com/sasidakh/kyu/kyu/v1;kyuv1b\x06proto3"
+	"\x03Ack\x12\x12.kyu.v1.AckRequest\x1a\x13.kyu.v1.AckResponseB*Z(github.com/koppathachan/kyu/kyu/v1;kyuv1b\x06proto3"
 
 var (
 	file_kyu_v1_kyu_proto_rawDescOnce sync.Once

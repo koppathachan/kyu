@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sasidakh/kyu/internal/engine"
-	"github.com/sasidakh/kyu/internal/queue"
+	"github.com/koppathachan/kyu/internal/engine"
+	"github.com/koppathachan/kyu/internal/queue"
 )
 
 // 9.8: a message that reaches the ceiling is transferred with no consumer
