@@ -3,7 +3,10 @@
 #
 # Built from source in one stage and shipped in another, so the image carries
 # the binary and nothing that built it.
-FROM golang:1.27-alpine AS build
+#
+# The build stage runs on the builder's own platform and cross-compiles for
+# the target, so a multi-arch image needs no emulation.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 WORKDIR /src
 
 # Dependencies first, so a source-only change does not re-download them.
@@ -11,7 +14,14 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/kyu ./cmd/kyu
+ARG TARGETOS
+ARG TARGETARCH
+# The release version, stamped by the release workflow; a local build reports
+# what the Go toolchain recorded instead.
+ARG VERSION=
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
+	-ldflags "-s -w${VERSION:+ -X github.com/koppathachan/kyu/internal/version.version=$VERSION}" \
+	-o /out/kyu ./cmd/kyu
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/kyu /kyu

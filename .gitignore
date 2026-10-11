@@ -16,3 +16,6 @@
 
 # Built binaries
 bin/
+
+# GoReleaser output
+dist/

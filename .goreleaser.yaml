@@ -1,0 +1,147 @@
+# How a tagged release is built. The release workflow runs this on every tag
+# matching v*.*.*; `make release-snapshot` runs it locally without publishing.
+#
+#   archives       kyu and kyu-memstore, per OS and architecture, with checksums
+#   linux packages .deb, .rpm and .apk — kyu with a systemd unit, and
+#                  kyu-memstore on its own
+#   homebrew       a cask in koppathachan/homebrew-tap, for macOS and Linux
+#
+# Container images are not built here. The release workflow builds them from
+# build/package/, which are the same Dockerfiles CI already checks.
+version: 2
+
+project_name: kyu
+
+before:
+  hooks:
+    - go mod tidy -diff
+
+builds:
+  - id: kyu
+    main: ./cmd/kyu
+    binary: kyu
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/koppathachan/kyu/internal/version.version={{ .Tag }}
+  - id: kyu-memstore
+    main: ./cmd/kyu-memstore
+    binary: kyu-memstore
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/koppathachan/kyu/internal/version.version={{ .Tag }}
+
+archives:
+  # One archive per platform holding both binaries: a deployment trying kyu
+  # out needs the engine and a storage server to point it at.
+  - id: kyu
+    ids: [kyu, kyu-memstore]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - docs/architecture.md
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: kyu
+    package_name: kyu
+    ids: [kyu]
+    formats: [deb, rpm, apk]
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: koppathachan
+    homepage: https://github.com/koppathachan/kyu
+    maintainer: koppathachan <akhilsasidharan1991@gmail.com>
+    description: |-
+      A message queue that runs on storage it does not implement.
+      The engine serves kyu.v1.Kyu and needs a kyu.storage.v1.Storage server,
+      which the deployment supplies.
+    license: MIT
+    bindir: /usr/bin
+    contents:
+      - src: init/kyu.service
+        dst: /usr/lib/systemd/system/kyu.service
+      - src: init/kyu.env
+        dst: /etc/kyu/kyu.env
+        type: config|noreplace
+        file_info:
+          mode: 0640
+
+  - id: kyu-memstore
+    package_name: kyu-memstore
+    ids: [kyu-memstore]
+    formats: [deb, rpm, apk]
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: koppathachan
+    homepage: https://github.com/koppathachan/kyu
+    maintainer: koppathachan <akhilsasidharan1991@gmail.com>
+    description: |-
+      The reference kyu.storage.v1.Storage server. Everything it holds is in
+      process memory and is lost when it stops: it is for trying kyu out and
+      for tests, not for production.
+    license: MIT
+    bindir: /usr/bin
+
+homebrew_casks:
+  - name: kyu
+    ids: [kyu]
+    binaries: [kyu, kyu-memstore]
+    homepage: https://github.com/koppathachan/kyu
+    description: A message queue that runs on storage it does not implement
+    license: MIT
+    repository:
+      owner: koppathachan
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
+    # Until the tap and its token exist, the cask is built but not pushed, so
+    # the rest of the release still goes out.
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}auto{{ else }}true{{ end }}'
+    commit_author:
+      name: koppathachan
+      email: akhilsasidharan1991@gmail.com
+    # The binaries are not signed or notarised, so macOS quarantines them on
+    # download and refuses to run them. Homebrew installed them on purpose;
+    # clearing the flag is what makes that work.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kyu"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kyu-memstore"]
+          end
+
+release:
+  github:
+    owner: koppathachan
+    name: kyu
+  # A tag such as v0.2.0-rc.1 is published as a prerelease.
+  prerelease: auto
+  footer: |
+    **Container images**
+
+    ```
+    docker pull ghcr.io/koppathachan/kyu:{{ .Version }}
+    docker pull ghcr.io/koppathachan/kyu-memstore:{{ .Version }}
+    ```
+
+    **Go packages** — the generated clients for both contracts:
+
+    ```
+    go get github.com/koppathachan/kyu@{{ .Tag }}
+    ```
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^chore:"
+      - "^spec:"

@@ -1,0 +1,28 @@
+# The kyu queue engine, as installed by the .deb, .rpm and .apk packages.
+#
+# It is installed but not enabled. kyu has no default storage backend, so set
+# KYU_STORAGE in /etc/kyu/kyu.env first, then:
+#
+#   systemctl enable --now kyu
+[Unit]
+Description=kyu queue engine
+Documentation=https://github.com/koppathachan/kyu
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/kyu/kyu.env
+ExecStart=/usr/bin/kyu
+Restart=on-failure
+
+# The engine keeps no state on disk — everything durable is in the storage
+# server — so it runs as a throwaway user with a read-only view of the system.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+[Install]
+WantedBy=multi-user.target

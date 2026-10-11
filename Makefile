@@ -81,6 +81,14 @@ lint-proto: ## Lint the contracts, and fail if any is not buf-formatted
 breaking: ## Fail if api/ breaks the contract it is compared against (BREAKING_AGAINST)
 	buf breaking --against '$(BREAKING_AGAINST)'
 
+.PHONY: release-check
+release-check: ## Validate the release configuration (needs goreleaser)
+	goreleaser check
+
+.PHONY: release-snapshot
+release-snapshot: ## Build every release artifact into dist/ without publishing (needs goreleaser)
+	goreleaser release --snapshot --clean
+
 .PHONY: help
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-16s %s\n", $$1, $$2}'

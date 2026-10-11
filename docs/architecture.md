@@ -90,6 +90,10 @@ does.
 - **Every replica sweeps every queue.** This is safe — concurrent sweeps
   resolve through `NOT_FOUND` — and multiplies the reaper's storage load by
   the replica count. See [Concurrency and replicas](#concurrency-and-replicas).
+- **It ships as one binary.** `kyu` is a static Go binary with no runtime
+  dependencies, published as a container image, Linux packages with a
+  systemd unit, a Homebrew cask and plain archives — see
+  [Installing it](../README.md#installing-it).
 - **There is no default backend.** `kyu` refuses to start without `-storage`
   or `KYU_STORAGE`. [`cmd/kyu-memstore`](../cmd/kyu-memstore/) is a reference
   server that keeps everything in process memory; it is for tests and for

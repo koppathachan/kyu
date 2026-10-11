@@ -11,6 +11,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow runs CI first, so nothing is released that CI rejects.
+  workflow_call:
 
 permissions:
   contents: read
@@ -32,6 +34,11 @@ jobs:
       - run: make vet
       - run: make test
       - run: make build
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: check
 
   contracts:
     runs-on: ubuntu-latest

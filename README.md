@@ -170,7 +170,10 @@ internal/                the implementation; importable by nobody
 cmd/kyu/                 the engine binary
 cmd/kyu-memstore/        the reference storage server binary
 build/package/           a Dockerfile per binary
+init/                    the systemd unit and its environment file, for the Linux packages
 scripts/                 build scripts
+.github/workflows/       CI, and the release a tag triggers
+.goreleaser.yaml         what a release builds and publishes
 
 docs/
   architecture.md        how kyu is built, in detail
@@ -222,6 +225,30 @@ be written in any language.
 holds everything in process memory: stop it and every message is gone. It
 exists so that the contract has a worked example and so that kyu's own tests
 run against a real backend over a real socket.
+
+## Installing it
+
+Every release is a tag, `v0.1.0` and on, published on the
+[releases page](https://github.com/koppathachan/kyu/releases). Each one
+carries the engine, `kyu`, and the reference storage server, `kyu-memstore`.
+
+| You want | Get it with |
+|---|---|
+| A container | `docker pull ghcr.io/koppathachan/kyu` — and `ghcr.io/koppathachan/kyu-memstore` — for `linux/amd64` and `linux/arm64` |
+| macOS or Linux, via Homebrew | `brew install --cask koppathachan/tap/kyu` |
+| Debian or Ubuntu | the `.deb` from the release: `sudo apt install ./kyu_<version>_linux_amd64.deb` |
+| Fedora, RHEL, Amazon Linux | the `.rpm` from the release: `sudo dnf install ./kyu_<version>_linux_amd64.rpm` |
+| Alpine | the `.apk` from the release: `sudo apk add --allow-untrusted ./kyu_<version>_linux_amd64.apk` |
+| A plain binary | the `.tar.gz` for your platform from the release, checked against `checksums.txt` |
+| From source | `go install github.com/koppathachan/kyu/cmd/kyu@latest` |
+| The generated clients, in Go | `go get github.com/koppathachan/kyu@latest`, then import `kyu/v1` or `kyu/storage/v1` |
+
+The Linux packages install `kyu` with a systemd unit that is not enabled,
+because kyu has no default backend. Set `KYU_STORAGE` in `/etc/kyu/kyu.env`,
+then `sudo systemctl enable --now kyu`. `kyu-memstore` is packaged separately
+and has no unit: it keeps everything in memory, so it is for trying kyu out.
+
+`kyu -version` reports the release a binary was built from.
 
 ## Running it
 
@@ -387,6 +414,21 @@ Container images are built per binary from `build/package/`:
 ```sh
 make docker-image
 ```
+
+### Cutting a release
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The [release workflow](.github/workflows/release.yml) runs all of CI, then
+[GoReleaser](.goreleaser.yaml) builds the archives, checksums, Linux packages
+and Homebrew cask and publishes the GitHub Release, the images go to
+`ghcr.io`, and the Go module proxy is asked for the tag. A tag with a suffix,
+such as `v0.2.0-rc.1`, is published as a prerelease and does not move
+`latest`. `make release-snapshot` builds everything into `dist/` locally
+without publishing; it needs [`goreleaser`](https://goreleaser.com).
 
 ## License
 
