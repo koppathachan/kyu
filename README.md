@@ -172,7 +172,7 @@ cmd/kyu-memstore/        the reference storage server binary
 build/package/           a Dockerfile per binary
 init/                    the systemd unit and its environment file, for the Linux packages
 scripts/                 build scripts
-.github/workflows/       CI, and the release a tag triggers
+.github/workflows/       the checks, the pull request title check, and the release a merge triggers
 .goreleaser.yaml         what a release builds and publishes
 
 docs/
@@ -229,7 +229,9 @@ run against a real backend over a real socket.
 ## Installing it
 
 Every release is a tag, `v0.1.0` and on, published on the
-[releases page](https://github.com/koppathachan/kyu/releases). Each one
+[releases page](https://github.com/koppathachan/kyu/releases). Versions follow
+[semantic versioning](https://semver.org) and are released automatically; see
+[Releases](#releases). Each one
 carries the engine, `kyu`, and the reference storage server, `kyu-memstore`.
 
 | You want | Get it with |
@@ -406,8 +408,8 @@ pull request, along with `gofmt`, `go mod tidy`, `go vet`, the tests with
 `-race`, and both container image builds. On a pull request `breaking`
 compares against the pull request's base; on a push, against the previous tip
 of `main`. A break that is intended is declared rather than hidden: a commit
-carrying a `Breaking-Change: <why>` trailer skips that comparison, and CI
-prints the reason.
+carrying a `BREAKING CHANGE: <why>` footer skips that comparison, CI prints
+the reason, and the release that follows is a breaking version.
 
 Container images are built per binary from `build/package/`:
 
@@ -415,20 +417,40 @@ Container images are built per binary from `build/package/`:
 make docker-image
 ```
 
-### Cutting a release
+## Releases
+
+There is no release step to run. Every change reaches `main` as a squash-merged
+pull request whose title becomes the commit subject, and that title decides
+whether the merge is released and how far the version moves. Titles are
+[Conventional Commits](https://www.conventionalcommits.org), and a check on
+every pull request refuses one that is not.
+
+| Pull request title | Release | Example |
+|---|---|---|
+| `feat: …` | minor | v0.4.2 → v0.5.0 |
+| `fix: …`, `perf: …` | patch | v0.4.2 → v0.4.3 |
+| `feat!: …`, or any type with a `BREAKING CHANGE: …` footer | major | v1.4.2 → v2.0.0 |
+| `docs:`, `test:`, `refactor:`, `style:`, `build:`, `ci:`, `chore:`, `revert:`, `spec:`, `license:`, `release:` | none | — |
+
+A scope is allowed: `fix(reaper): …`. Before 1.0, a breaking change moves
+the minor version instead — v0.4.2 → v0.5.0 — because 1.0.0 is a decision
+rather than something a commit message makes. The first release is v0.1.0.
+
+On a merge that calls for a release, the
+[release workflow](.github/workflows/release.yml) runs every check a pull
+request must pass, tags the merge, and publishes: [GoReleaser](.goreleaser.yaml)
+builds the archives, checksums, Linux packages and Homebrew cask and the GitHub
+Release that carries them, the images go to `ghcr.io`, and the Go module proxy
+is asked for the tag. Releases happen one at a time, in merge order.
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+make next-version       # the version the current main would release, if any
+make release-snapshot   # build every artifact into dist/ without publishing
 ```
 
-The [release workflow](.github/workflows/release.yml) runs every check a pull request must pass, then
-[GoReleaser](.goreleaser.yaml) builds the archives, checksums, Linux packages
-and Homebrew cask and publishes the GitHub Release, the images go to
-`ghcr.io`, and the Go module proxy is asked for the tag. A tag with a suffix,
-such as `v0.2.0-rc.1`, is published as a prerelease and does not move
-`latest`. `make release-snapshot` builds everything into `dist/` locally
-without publishing; it needs [`goreleaser`](https://goreleaser.com).
+`make release-snapshot` needs [`goreleaser`](https://goreleaser.com). The
+rules live in [`scripts/next-version.sh`](scripts/next-version.sh), and
+`make release-test` runs their tests.
 
 ## License
 

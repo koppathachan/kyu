@@ -1,0 +1,22 @@
+# main is squash-merged with the pull request's title as the commit subject,
+# and the release workflow reads the version from it. A title it cannot parse
+# would silently release nothing, so it is checked here — on every edit as
+# well as every push, since a title can change without a commit.
+name: pull request
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: "Title: conventional commit"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: ./scripts/check-title.sh "$TITLE"

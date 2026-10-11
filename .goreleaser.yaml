@@ -1,5 +1,6 @@
-# How a tagged release is built. The release workflow runs this on every tag
-# matching v*.*.*; `make release-snapshot` runs it locally without publishing.
+# How a release is built. The release workflow runs this once it has tagged a
+# merge to main that calls for a release; `make release-snapshot` runs it
+# locally without publishing.
 #
 #   archives       kyu and kyu-memstore, per OS and architecture, with checksums
 #   linux packages .deb, .rpm and .apk — kyu with a systemd unit, and
