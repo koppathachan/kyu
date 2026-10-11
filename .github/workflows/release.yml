@@ -1,33 +1,84 @@
-# A release is a pushed tag: git tag v0.1.0 && git push origin v0.1.0
+# Every merge to main is considered for release. The version follows from the
+# merged pull request's title, as scripts/next-version.sh decides: feat: is a
+# minor release, fix: and perf: a patch, a breaking change a major, and any
+# other type no release at all.
 #
+#   version   the tag this merge calls for, if any; nothing below runs without one
 #   checks    every check a pull request must pass, so nothing is released
 #             that main would reject
+#   tag       pushes the tag, only once the checks have passed
 #   packages  GoReleaser: archives, checksums, .deb/.rpm/.apk, the Homebrew
 #             cask, and the GitHub Release that carries them
 #   images    ghcr.io/koppathachan/kyu and kyu-memstore, linux/amd64 + arm64
 #   module    asks the Go module proxy for the tag, so `go get …@v0.1.0` and
 #             pkg.go.dev see it at once instead of on first request
+#
+# The tag is pushed and released in this one workflow, not by a second one
+# listening for tags: a tag pushed with the workflow's own token does not
+# start other workflows.
 name: release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    branches: [main]
 
 permissions:
   contents: read
 
+# Releases happen one at a time and are never cancelled half-way, so that two
+# quick merges are versioned in order and a tag is never left unpublished.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # every commit and tag since the last release
+      - id: next
+        run: |
+          tag=$(./scripts/next-version.sh)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then
+            echo "releasing $tag" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "no release: nothing since the last release is a feat, fix, perf or breaking change" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
   checks:
+    needs: version
+    if: needs.version.outputs.tag != ''
     uses: ./.github/workflows/checks.yml
 
+  tag:
+    needs: [version, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag
+    steps:
+      - uses: actions/checkout@v5
+      - env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+
   packages:
-    needs: checks
+    needs: [version, tag]
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub Release and upload to it
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ needs.version.outputs.tag }}
           fetch-depth: 0 # the changelog is built from history
       - uses: actions/setup-go@v6
         with:
@@ -38,12 +89,14 @@ jobs:
           version: "~> v2"
           args: release --clean
         env:
+          GORELEASER_CURRENT_TAG: ${{ needs.version.outputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional. Without it the cask is built but not pushed to the tap.
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # The deploy key for koppathachan/homebrew-tap. Without it the cask
+          # is built but not pushed.
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
 
   images:
-    needs: checks
+    needs: [version, tag]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -53,6 +106,8 @@ jobs:
         image: [kyu, kyu-memstore]
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -63,28 +118,29 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/koppathachan/${{ matrix.image }}
-          # v1.2.3 is tagged 1.2.3 and 1.2; latest moves only on a final
-          # release, never on a prerelease such as v1.3.0-rc.1.
+          # v1.2.3 is tagged 1.2.3 and 1.2, and latest.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
           flavor: |
-            latest=auto
+            latest=true
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: build/package/${{ matrix.image }}.Dockerfile
           platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ needs.version.outputs.tag }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
   module:
-    needs: packages
+    needs: [version, packages]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-      - run: GOPROXY=https://proxy.golang.org go list -m "github.com/koppathachan/kyu@${GITHUB_REF_NAME}"
+      - env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: GOPROXY=https://proxy.golang.org go list -m "github.com/koppathachan/kyu@$TAG"

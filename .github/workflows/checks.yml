@@ -3,7 +3,8 @@
 # can be reproduced by typing what it typed.
 #
 #   Go              formatting, module tidiness, third-party notices, vet, the
-#                   tests with -race, the build, and the release configuration
+#                   tests with -race, the release scripts' tests, the build,
+#                   and the release configuration
 #   Protobuf API    proto lint and format, the check that the committed kyu/ is
 #                   what regeneration produces, and breaking-change detection
 #   Docker images   both images build
@@ -23,8 +24,11 @@ on:
 permissions:
   contents: read
 
+# Keyed on the workflow as well as the ref: when the release workflow calls
+# these checks, github.workflow is "release", so its run on main and the
+# ordinary run on main are different groups and cannot cancel each other.
 concurrency:
-  group: checks-${{ github.ref }}
+  group: checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -41,6 +45,7 @@ jobs:
       - run: make notices-check
       - run: make vet
       - run: make test
+      - run: make release-test
       - run: make build
       - uses: goreleaser/goreleaser-action@v6
         with:
@@ -73,10 +78,11 @@ jobs:
       # the branch has no previous tip, and is not compared.
       #
       # A break that is intended is declared, not hidden: a commit in the range
-      # carrying a "Breaking-Change: <why>" trailer skips the comparison, and
-      # the reason is printed here so the log records it. The match allows a
-      # list prefix, because a squash merge quotes each commit as "* subject"
-      # followed by its body.
+      # carrying a Conventional Commits "BREAKING CHANGE: <why>" footer skips
+      # the comparison, and the reason is printed here so the log records it.
+      # The same footer makes the release a breaking version. The match takes
+      # the "BREAKING-CHANGE" synonym and any case, and allows a list prefix,
+      # because a squash merge quotes each commit as "* subject" and its body.
       - name: make breaking
         env:
           AGAINST: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
@@ -85,7 +91,7 @@ jobs:
             echo "no previous commit to compare against"
             exit 0
           fi
-          declared=$(git log --format=%B "$AGAINST..HEAD" | grep -iE '^[[:space:]*-]*Breaking-Change:' || true)
+          declared=$(git log --format=%B "$AGAINST..HEAD" | grep -iE '^[[:space:]*-]*BREAKING[ -]CHANGE:' || true)
           if [ -n "$declared" ]; then
             echo "breaking change declared, comparison skipped:"
             echo "$declared"

@@ -96,6 +96,16 @@ lint-proto: ## Lint the contracts, and fail if any is not buf-formatted
 breaking: ## Fail if api/ breaks the contract it is compared against (BREAKING_AGAINST)
 	buf breaking --against '$(BREAKING_AGAINST)'
 
+.PHONY: release-test
+release-test: ## Test the scripts that version releases and check pull request titles
+	./scripts/next-version_test.sh
+	./scripts/check-title.sh "feat(engine)!: a title the check accepts" >/dev/null
+	! ./scripts/check-title.sh "Not a conventional title" 2>/dev/null
+
+.PHONY: next-version
+next-version: ## Print the version the next merge to main would release, if any
+	@./scripts/next-version.sh
+
 .PHONY: release-check
 release-check: ## Validate the release configuration (needs goreleaser)
 	goreleaser check
